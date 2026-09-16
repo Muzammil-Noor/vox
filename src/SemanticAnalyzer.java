@@ -41,9 +41,9 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
 
     /**
      * What a builtin accepts per parameter, and what it returns.
-     *   params: "num" | "string" | "sized" (string or list) | "list"
-     *         | "sortable" (a list of scalars) | "numlist" (a list of numbers)
-     *         | "item" (something that fits the first argument's item type)
+     *   params: "num" | "whole" (integer only) | "string" | "sized" (string or
+     *           list) | "list" | "sortable" (a list of scalars) | "numlist" (a
+     *           list of numbers) | "item" (fits the first argument's item type)
      *   result: a fixed type, "numeric" (float if any float), "same" (the
      *           first argument's type), "element" (its item type) or "void"
      */
@@ -84,10 +84,25 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
         // ordering and aggregates
         BUILTINS.put("sort",      new BuiltinSpec("void",    "sortable"));
         BUILTINS.put("reverse",   new BuiltinSpec("void",    "list"));
+        BUILTINS.put("shuffle",   new BuiltinSpec("void",    "list"));
         BUILTINS.put("sum",       new BuiltinSpec("element", "numlist"));
         BUILTINS.put("largest",   new BuiltinSpec("element", "sortable"));
         BUILTINS.put("smallest",  new BuiltinSpec("element", "sortable"));
-        BUILTINS.put("position",  new BuiltinSpec("integer", "list", "item"));
+        BUILTINS.put("pick",      new BuiltinSpec("element", "list"));
+        BUILTINS.put("position",  new BuiltinSpec("integer", "sized", "item"));
+        // strings as sequences
+        BUILTINS.put("characters", new BuiltinSpec(listOf("string"), "string"));
+        BUILTINS.put("trim",       new BuiltinSpec("string",  "string"));
+        BUILTINS.put("starts",     new BuiltinSpec("boolean", "string", "string"));
+        BUILTINS.put("ends",       new BuiltinSpec("boolean", "string", "string"));
+        BUILTINS.put("split",      new BuiltinSpec(listOf("string"), "string", "string"));
+        BUILTINS.put("join",       new BuiltinSpec("string",  "list", "string"));
+        BUILTINS.put("replace",    new BuiltinSpec("string",  "string", "string", "string"));
+        BUILTINS.put("reversed",   new BuiltinSpec("same",    "sized"));
+        // randomness and rounding
+        BUILTINS.put("random",    new BuiltinSpec("integer", "whole", "whole"));
+        BUILTINS.put("seed",      new BuiltinSpec("void",    "whole"));
+        BUILTINS.put("rounded",   new BuiltinSpec("float",   "num", "whole"));
     }
 
     /** Maps a spoken builtin token onto its symbolic name. */
@@ -102,6 +117,10 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
         if (ctx.SUM_OF() != null) return "sum";
         if (ctx.LARGEST_OF() != null) return "largest";
         if (ctx.SMALLEST_OF() != null) return "smallest";
+        if (ctx.CHARACTERS_OF() != null) return "characters";
+        if (ctx.TRIM_OF() != null) return "trim";
+        if (ctx.REVERSED_OF() != null) return "reversed";
+        if (ctx.RANDOM_ITEM_OF() != null) return "pick";
         return "lowercase";
     }
 
@@ -417,19 +436,34 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
             VoxParser.IndexTargetContext indexed = (VoxParser.IndexTargetContext) target;
             String base = typeOfTarget(indexed.target(), false);
             requireIndex(indexed.expression(), visit(indexed.expression()));
-            return itemTypeOf(indexed, base);
+            return itemTypeOf(indexed, base, writing);
         }
         VoxParser.OrdinalTargetContext ordinal = (VoxParser.OrdinalTargetContext) target;
         checkOrdinal(ordinal, ordinal.ORDINAL());
-        return itemTypeOf(ordinal, typeOfTarget(ordinal.target(), false));
+        return itemTypeOf(ordinal, typeOfTarget(ordinal.target(), false), writing);
     }
 
-    /** The item type of a list type; reports when the base is not a list. */
     private String itemTypeOf(ParserRuleContext ctx, String base) {
+        return itemTypeOf(ctx, base, false);
+    }
+
+    /**
+     * The item type behind an index: a list's item type, or a single-character
+     * string when indexing text. Reports when the base has no items at all, or
+     * when a string is being written to - strings cannot change in place.
+     */
+    private String itemTypeOf(ParserRuleContext ctx, String base, boolean writing) {
         if (base == null || "error".equals(base)) return null;
         if ("any".equals(base)) return "any";
+        if ("string".equals(base)) {
+            if (writing) {
+                error(ctx, "a string cannot be changed in place; build a new one instead");
+                return null;
+            }
+            return "string";
+        }
         if (!isList(base)) {
-            error(ctx, "cannot index " + base + "; only lists have items");
+            error(ctx, "cannot index " + base + "; only lists and strings have items");
             return null;
         }
         return elementOf(base);
@@ -643,15 +677,73 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
         return null;
     }
 
-    /** `position of x in xs` is position(xs, x). */
+    /** `position of x in xs` is position(xs, x); in a string it finds text. */
     @Override
     public String visitPositionExpr(VoxParser.PositionExprContext ctx) {
         String valueType = visit(ctx.expression(0));
         String listType = visit(ctx.expression(1));
-        List<String> argTypes = new ArrayList<>();
-        argTypes.add(listType);
-        argTypes.add(valueType);
-        return checkBuiltin(ctx, "position", argTypes);
+        return checkBuiltin(ctx, "position", args(listType, valueType));
+    }
+
+    private static List<String> args(String... types) {
+        return new ArrayList<>(Arrays.asList(types));
+    }
+
+    /** `xs from a to b` / `s from a until b`: a fresh list, or a substring. */
+    @Override
+    public String visitSliceExpr(VoxParser.SliceExprContext ctx) {
+        String base = visit(ctx.expression(0));
+        requireIndex(ctx.low, visit(ctx.low));
+        requireIndex(ctx.high, visit(ctx.high));
+        if (base == null || "error".equals(base)) return "error";
+        if ("any".equals(base)) return "any";
+        if ("string".equals(base) || isList(base)) return base;
+        error(ctx, "cannot slice " + base + "; only lists and strings have items");
+        return "error";
+    }
+
+    @Override
+    public String visitSplitExpr(VoxParser.SplitExprContext ctx) {
+        return checkBuiltin(ctx, "split", args(visit(ctx.expression(0)), visit(ctx.expression(1))));
+    }
+
+    @Override
+    public String visitJoinExpr(VoxParser.JoinExprContext ctx) {
+        return checkBuiltin(ctx, "join", args(visit(ctx.expression(0)), visit(ctx.expression(1))));
+    }
+
+    @Override
+    public String visitAffixExpr(VoxParser.AffixExprContext ctx) {
+        String name = "starts".equals(ctx.affix.getText()) ? "starts" : "ends";
+        return checkBuiltin(ctx, name, args(visit(ctx.expression(0)), visit(ctx.expression(1))));
+    }
+
+    @Override
+    public String visitRoundedExpr(VoxParser.RoundedExprContext ctx) {
+        return checkBuiltin(ctx, "rounded", args(visit(ctx.expression(0)), visit(ctx.expression(1))));
+    }
+
+    @Override
+    public String visitRandomExpr(VoxParser.RandomExprContext ctx) {
+        return checkBuiltin(ctx, "random", args(visit(ctx.low), visit(ctx.high)));
+    }
+
+    /** `pop the 1st item of xs`: the spoken form of `pop xs at 0`. */
+    @Override
+    public String visitPopOrdinal(VoxParser.PopOrdinalContext ctx) {
+        checkOrdinal(ctx, ctx.ORDINAL());
+        return popResult(ctx, visit(ctx.expression()));
+    }
+
+    @Override
+    public String visitSeedStmt(VoxParser.SeedStmtContext ctx) {
+        checkBuiltin(ctx, "seed", args(visit(ctx.expression())));
+        return null;
+    }
+
+    @Override
+    public String visitHaltStmt(VoxParser.HaltStmtContext ctx) {
+        return null;
     }
 
     private String popResult(ParserRuleContext ctx, String listType) {
@@ -718,8 +810,16 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
 
     private void checkContains(ParserRuleContext ctx, String op, String listType, String valueType) {
         if (listType == null || "error".equals(listType) || "any".equals(listType)) return;
+        if ("string".equals(listType)) {
+            // In text, `contains` looks for a substring.
+            if (valueType != null && !"error".equals(valueType) && !"any".equals(valueType)
+                    && !"string".equals(valueType)) {
+                error(ctx, "operator '" + op + "' can only look for text in a string, not " + valueType);
+            }
+            return;
+        }
         if (!isList(listType)) {
-            error(ctx, "operator '" + op + "' needs a list but got " + listType);
+            error(ctx, "operator '" + op + "' needs a list or a string but got " + listType);
             return;
         }
         if (valueType != null && !"error".equals(valueType) && !"any".equals(valueType)
@@ -807,8 +907,10 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
         if (listType != null && !"error".equals(listType) && !"any".equals(listType)) {
             if (isList(listType)) {
                 element = elementOf(listType);
+            } else if ("string".equals(listType)) {
+                element = "string"; // one character at a time
             } else {
-                error(ctx.expression(), "for each needs a list but got " + listType);
+                error(ctx.expression(), "for each needs a list or a string but got " + listType);
             }
         }
 
@@ -1241,6 +1343,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
             String want;
             switch (kind) {
                 case "num":    ok = isNumeric(got); want = "a number"; break;
+                case "whole":  ok = "integer".equals(got); want = "a whole number"; break;
                 case "string": ok = "string".equals(got) || "character".equals(got); want = "string"; break;
                 case "list":   ok = isList(got); want = "a list"; break;
                 case "sized":  ok = "string".equals(got) || "character".equals(got) || isList(got);
@@ -1256,7 +1359,8 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
                     break;
                 }
                 default: { // item: must fit the first argument's item type
-                    String element = (first != null && isList(first)) ? elementOf(first) : "any";
+                    String element = "string".equals(first) ? "string"
+                            : (first != null && isList(first)) ? elementOf(first) : "any";
                     ok = !"no".equals(fits(element, got));
                     want = element;
                 }
@@ -1367,8 +1471,9 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
             case "bool": case "bools": case "boolean": case "booleans":
             case "boolean number": case "boolean numbers":
                 return "boolean";
+            // `character` is a spelling of `string`: a one-character string is
+            // just a string, so there is no separate type to trip over.
             case "char": case "chars": case "character": case "characters":
-                return "character";
             case "string": case "strings": case "character string": case "character strings":
             case "varchar":
                 return "string";

@@ -8,6 +8,7 @@ import natural from "../../examples/natural.vox?raw";
 import counting from "../../examples/counting.vox?raw";
 import playlist from "../../examples/playlist.vox?raw";
 import voice from "../../examples/voice.vox?raw";
+import wordplay from "../../examples/wordplay.vox?raw";
 
 export interface Example {
   id: string;
@@ -46,6 +47,12 @@ export const EXAMPLES: Example[] = [
     name: "Playlist",
     blurb: "Lists: push, pop, ordinals and for each.",
     source: playlist,
+  },
+  {
+    id: "wordplay",
+    name: "Wordplay",
+    blurb: "Strings as sequences, palindromes and a seeded shuffle.",
+    source: wordplay,
   },
   {
     id: "factorial",

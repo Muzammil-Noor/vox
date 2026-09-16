@@ -25,7 +25,9 @@ import java.util.*;
  *   list_push <list> <value>
  *   list_insert <list> <index> <value>
  *   list_pop <dest> <list> [index]    removes (and yields) the last item, or item <index>
- *   list_has <dest> <list> <value>
+ *   list_has <dest> <list> <value>    also substring search, when <list> is a string
+ *   slice <dest> <seq> <from> <to>    a fresh list or substring; <to> is exclusive
+ *   halt                              ends the program, whatever the call depth
  *   if_false <cond> goto <label>
  *   goto <label>
  *   label <label>
@@ -270,21 +272,37 @@ public class IRExecutor {
 
                 case "list_get": {
                     require(toks, 4, raw);
-                    VoxList list = asList(resolve(toks[2]));
-                    int i = checkIndex(resolve(toks[3]), list, false);
-                    frame().locals.put(toks[1], list.items.get(i));
+                    // Also indexes a string, which is how `s[i]` and
+                    // `for each ch in s` are executed.
+                    frame().locals.put(toks[1], itemAt(resolve(toks[2]), resolve(toks[3])));
                     pc++;
                     break;
                 }
 
                 case "list_set": {
                     require(toks, 4, raw);
-                    VoxList list = asList(resolve(toks[1]));
-                    int i = checkIndex(resolve(toks[2]), list, false);
+                    Object target = resolve(toks[1]);
+                    if (target instanceof String) {
+                        throw new VoxRuntimeError(
+                                "a string cannot be changed in place; build a new one instead");
+                    }
+                    VoxList list = asList(target);
+                    int i = checkIndex(resolve(toks[2]), list.items.size(), list.wrapping, false, "a list");
                     list.items.set(i, resolve(toks[3]));
                     pc++;
                     break;
                 }
+
+                case "slice": {
+                    require(toks, 5, raw);
+                    frame().locals.put(toks[1],
+                            sliceOf(resolve(toks[2]), resolve(toks[3]), resolve(toks[4])));
+                    pc++;
+                    break;
+                }
+
+                case "halt":
+                    return;
 
                 case "list_push": {
                     require(toks, 3, raw);
@@ -299,7 +317,7 @@ public class IRExecutor {
                     require(toks, 4, raw);
                     VoxList list = asList(resolve(toks[1]));
                     if (list.locked) throw new VoxRuntimeError("cannot insert into a locked list");
-                    int i = checkIndex(resolve(toks[2]), list, true);
+                    int i = checkIndex(resolve(toks[2]), list.items.size(), list.wrapping, true, "a list");
                     list.items.add(i, resolve(toks[3]));
                     pc++;
                     break;
@@ -311,7 +329,7 @@ public class IRExecutor {
                     if (list.locked) throw new VoxRuntimeError("cannot pop from a locked list");
                     if (list.items.isEmpty()) throw new VoxRuntimeError("cannot pop from an empty list");
                     int i = toks.length >= 4
-                            ? checkIndex(resolve(toks[3]), list, false)
+                            ? checkIndex(resolve(toks[3]), list.items.size(), list.wrapping, false, "a list")
                             : list.items.size() - 1;
                     frame().locals.put(toks[1], list.items.remove(i));
                     pc++;
@@ -320,13 +338,7 @@ public class IRExecutor {
 
                 case "list_has": {
                     require(toks, 4, raw);
-                    VoxList list = asList(resolve(toks[2]));
-                    Object wanted = resolve(toks[3]);
-                    boolean found = false;
-                    for (Object item : list.items) {
-                        if (equal(item, wanted)) { found = true; break; }
-                    }
-                    frame().locals.put(toks[1], found);
+                    frame().locals.put(toks[1], sequenceHas(resolve(toks[2]), resolve(toks[3])));
                     pc++;
                     break;
                 }
@@ -528,25 +540,142 @@ public class IRExecutor {
     }
 
     /**
-     * Validates a list index: an integer from 0 to length - 1 (or to length
-     * when inserting, so an item can go at the end). A wrapping list counts
-     * around its ends instead - `-1` is the last item - except for insert
-     * positions, where wrapping the end to the front would misplace items.
+     * Validates an index into a list or a string: an integer from 0 to
+     * length - 1 (or to length when inserting, so an item can go at the end).
+     * A wrapping list counts around its ends instead - `-1` is the last item -
+     * except for insert positions, where wrapping the end to the front would
+     * misplace items.
      */
-    private static int checkIndex(Object index, VoxList list, boolean allowEnd) {
+    private static int checkIndex(Object index, int length, boolean wrapping,
+                                  boolean allowEnd, String what) {
         if (!(index instanceof Integer)) {
             throw new VoxRuntimeError("index must be an integer but got " + describe(index));
         }
         int i = (Integer) index;
-        int length = list.items.size();
-        if (list.wrapping && !allowEnd && length > 0) {
+        if (wrapping && !allowEnd && length > 0) {
             return ((i % length) + length) % length;
         }
         int limit = allowEnd ? length : length - 1;
         if (i < 0 || i > limit) {
-            throw new VoxRuntimeError("index " + i + " is out of range for a list of " + length);
+            throw new VoxRuntimeError("index " + i + " is out of range for " + what + " of " + length);
         }
         return i;
+    }
+
+    /** How many items or characters a value has, for the operations that take both. */
+    private static int sequenceLength(Object v) {
+        if (v instanceof VoxList) return ((VoxList) v).items.size();
+        if (v instanceof String) return ((String) v).length();
+        throw new VoxRuntimeError("cannot index " + describe(v)
+                + "; only lists and strings have items");
+    }
+
+    /** One item of a list, or one character of a string, as a value. */
+    private static Object itemAt(Object seq, Object index) {
+        if (seq instanceof String) {
+            String s = (String) seq;
+            return String.valueOf(s.charAt(checkIndex(index, s.length(), false, false, "a string")));
+        }
+        VoxList list = asList(seq);
+        return list.items.get(checkIndex(index, list.items.size(), list.wrapping, false, "a list"));
+    }
+
+    /** `xs from a until b`: a fresh list, or a substring. The end is exclusive. */
+    private static Object sliceOf(Object seq, Object from, Object to) {
+        boolean isText = seq instanceof String;
+        int length = sequenceLength(seq);
+        String what = isText ? "a string" : "a list";
+        int start = checkIndex(from, length, false, true, what);
+        int end = checkIndex(to, length, false, true, what);
+        if (end < start) {
+            throw new VoxRuntimeError("a slice cannot end (" + end + ") before it starts (" + start + ")");
+        }
+        if (isText) return ((String) seq).substring(start, end);
+        return new VoxList(new ArrayList<>(asList(seq).items.subList(start, end)));
+    }
+
+    /** Whether a list holds a value, or a string holds a substring. */
+    private static boolean sequenceHas(Object seq, Object wanted) {
+        if (seq instanceof String) {
+            if (!(wanted instanceof String)) {
+                throw new VoxRuntimeError("a string can only contain text, but got " + describe(wanted));
+            }
+            return ((String) seq).contains((String) wanted);
+        }
+        for (Object item : asList(seq).items) {
+            if (equal(item, wanted)) return true;
+        }
+        return false;
+    }
+
+    // ------------------------------------------------------------ strings --
+    // Written out rather than leaning on the library, so the TypeScript port
+    // splits, trims and reverses exactly the same way.
+
+    private static List<Object> charsOf(String s) {
+        List<Object> out = new ArrayList<>();
+        for (int i = 0; i < s.length(); i++) out.add(String.valueOf(s.charAt(i)));
+        return out;
+    }
+
+    private static String trimText(String s) {
+        int a = 0;
+        int b = s.length();
+        while (a < b && s.charAt(a) <= ' ') a++;
+        while (b > a && s.charAt(b - 1) <= ' ') b--;
+        return s.substring(a, b);
+    }
+
+    private static List<Object> splitText(String s, String separator) {
+        if (separator.isEmpty()) return charsOf(s);
+        List<Object> out = new ArrayList<>();
+        int i = 0;
+        while (true) {
+            int j = s.indexOf(separator, i);
+            if (j < 0) { out.add(s.substring(i)); return out; }
+            out.add(s.substring(i, j));
+            i = j + separator.length();
+        }
+    }
+
+    private static String reverseText(String s) {
+        StringBuilder out = new StringBuilder(s.length());
+        for (int i = s.length() - 1; i >= 0; i--) out.append(s.charAt(i));
+        return out.toString();
+    }
+
+    // --------------------------------------------------------- randomness --
+    // A 32-bit xorshift, written the same way in both engines so a seeded
+    // program deals the same numbers in Java and in the browser. Unseeded it
+    // starts from the clock, so a program feels random until it asks not to be.
+
+    private static int rngState = startingSeed();
+
+    private static int startingSeed() {
+        int s = (int) (System.currentTimeMillis() ^ 0x9e3779b9L);
+        return s == 0 ? 1 : s;
+    }
+
+    private static void seedRandom(Object n) {
+        if (!(n instanceof Integer)) {
+            throw new VoxRuntimeError("a random seed must be an integer but got " + describe(n));
+        }
+        int s = (Integer) n;
+        rngState = s == 0 ? 1 : s;
+    }
+
+    private static long nextUint32() {
+        int x = rngState;
+        x ^= x << 13;
+        x ^= x >>> 17;
+        x ^= x << 5;
+        rngState = x;
+        return Integer.toUnsignedLong(x);
+    }
+
+    /** A uniform integer in [0, bound), for bound > 0. */
+    private static long nextBelow(long bound) {
+        return nextUint32() % bound;
     }
 
     /** Value equality: numbers by value across int/float, lists item by item. */
@@ -769,11 +898,105 @@ public class IRExecutor {
             }
             case "position": {
                 arity(name, args, 2);
+                // In a string this looks for text; in a list, for an item.
+                if (args.get(0) instanceof String) {
+                    if (!(args.get(1) instanceof String)) {
+                        throw new VoxRuntimeError("'position' needs text to look for but got "
+                                + describe(args.get(1)));
+                    }
+                    return ((String) args.get(0)).indexOf((String) args.get(1));
+                }
                 List<Object> items = list(name, args.get(0)).items;
                 for (int i = 0; i < items.size(); i++) {
                     if (equal(items.get(i), args.get(1))) return i;
                 }
                 return -1;
+            }
+
+            // ---- strings as sequences -------------------------------------------
+            case "characters": arity(name, args, 1); return new VoxList(charsOf(str(name, args.get(0))));
+            case "trim":       arity(name, args, 1); return trimText(str(name, args.get(0)));
+            case "starts":     arity(name, args, 2); return str(name, args.get(0)).startsWith(str(name, args.get(1)));
+            case "ends":       arity(name, args, 2); return str(name, args.get(0)).endsWith(str(name, args.get(1)));
+            case "split":      arity(name, args, 2); return new VoxList(splitText(str(name, args.get(0)), str(name, args.get(1))));
+            case "join": {
+                arity(name, args, 2);
+                String separator = str(name, args.get(1));
+                StringBuilder out = new StringBuilder();
+                boolean first = true;
+                for (Object item : list(name, args.get(0)).items) {
+                    if (!first) out.append(separator);
+                    first = false;
+                    out.append(display(item));
+                }
+                return out.toString();
+            }
+            case "replace": {
+                arity(name, args, 3);
+                String text = str(name, args.get(0));
+                String from = str(name, args.get(1));
+                String to = str(name, args.get(2));
+                if (from.isEmpty()) throw new VoxRuntimeError("'replace' needs something to look for");
+                StringBuilder out = new StringBuilder();
+                int i = 0;
+                while (true) {
+                    int j = text.indexOf(from, i);
+                    if (j < 0) return out.append(text.substring(i)).toString();
+                    out.append(text, i, j).append(to);
+                    i = j + from.length();
+                }
+            }
+            case "reversed": {
+                arity(name, args, 1);
+                Object v = args.get(0);
+                if (v instanceof String) return reverseText((String) v);
+                return new VoxList(reversedItems(list(name, v).items));
+            }
+
+            // ---- randomness -----------------------------------------------------
+            case "random": {
+                arity(name, args, 2);
+                Object lo = num(name, args.get(0));
+                Object hi = num(name, args.get(1));
+                if (!(lo instanceof Integer) || !(hi instanceof Integer)) {
+                    throw new VoxRuntimeError("a random number needs whole bounds");
+                }
+                long range = (long) (Integer) hi - (Integer) lo + 1;
+                if (range <= 0) {
+                    throw new VoxRuntimeError("no numbers between " + lo + " and " + hi);
+                }
+                return (int) ((Integer) lo + nextBelow(range));
+            }
+            case "pick": {
+                arity(name, args, 1);
+                List<Object> items = list(name, args.get(0)).items;
+                if (items.isEmpty()) throw new VoxRuntimeError("a random item of an empty list");
+                return items.get((int) nextBelow(items.size()));
+            }
+            case "shuffle": {
+                arity(name, args, 1);
+                List<Object> items = list(name, args.get(0)).items;
+                // Fisher-Yates, stepping the same way in both engines.
+                for (int i = items.size() - 1; i > 0; i--) {
+                    int j = (int) nextBelow(i + 1);
+                    Object t = items.get(i);
+                    items.set(i, items.get(j));
+                    items.set(j, t);
+                }
+                return null;
+            }
+            case "seed": arity(name, args, 1); seedRandom(args.get(0)); return null;
+
+            // ---- rounding to a number of places ---------------------------------
+            case "rounded": {
+                arity(name, args, 2);
+                Object places = args.get(1);
+                if (!(places instanceof Integer) || (Integer) places < 0 || (Integer) places > 15) {
+                    throw new VoxRuntimeError("'rounded' needs a place count from 0 to 15 but got "
+                            + describe(places));
+                }
+                double factor = Math.pow(10, (Integer) places);
+                return Math.round(toDouble(num(name, args.get(0))) * factor) / factor;
             }
             default:
                 throw new VoxRuntimeError("unknown builtin: " + name);
@@ -795,6 +1018,12 @@ public class IRExecutor {
     private static String str(String name, Object v) {
         if (!(v instanceof String)) throw new VoxRuntimeError("'" + name + "' needs a string but got " + describe(v));
         return (String) v;
+    }
+
+    private static List<Object> reversedItems(List<Object> items) {
+        List<Object> out = new ArrayList<>(items);
+        Collections.reverse(out);
+        return out;
     }
 
     private static VoxList list(String name, Object v) {

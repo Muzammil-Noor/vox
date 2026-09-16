@@ -1,6 +1,7 @@
 import {
     VoxValue, VoxList, VoxRuntimeError, display, truthy, arithmetic, compare, coerceInput,
-    negate, cast, builtin, equal, defaultValue, asList, checkIndex, describe,
+    negate, cast, builtin, defaultValue, asList, checkIndex, describe,
+    itemAt, sliceOf, sequenceHas,
 } from './values.js';
 
 export { VoxRuntimeError };
@@ -55,7 +56,9 @@ const DEFAULT_STEP_LIMIT = 50_000_000;
  *   list_push <list> <value>
  *   list_insert <list> <index> <value>
  *   list_pop <dest> <list> [index]    removes (and yields) the last item, or item <index>
- *   list_has <dest> <list> <value>
+ *   list_has <dest> <list> <value>    also substring search, when <list> is a string
+ *   slice <dest> <seq> <from> <to>    a fresh list or substring; <to> is exclusive
+ *   halt                              ends the program, whatever the call depth
  *   if_false <cond> goto <label>
  *   goto <label>
  *   label <label>
@@ -265,21 +268,39 @@ export class IRExecutor {
 
                 case 'list_get': {
                     this.require(toks, 4, raw);
-                    const list = asList(this.resolve(toks[2]));
-                    const i = checkIndex(this.resolve(toks[3]), list, false);
-                    this.frame().locals.set(toks[1], list.items[i]);
+                    // Also indexes a string, which is how `s[i]` and
+                    // `for each ch in s` are executed.
+                    this.frame().locals.set(toks[1],
+                        itemAt(this.resolve(toks[2]), this.resolve(toks[3])));
                     this.pc++;
                     break;
                 }
 
                 case 'list_set': {
                     this.require(toks, 4, raw);
-                    const list = asList(this.resolve(toks[1]));
-                    const i = checkIndex(this.resolve(toks[2]), list, false);
+                    const target = this.resolve(toks[1]);
+                    if (typeof target === 'string') {
+                        throw new VoxRuntimeError(
+                            'a string cannot be changed in place; build a new one instead');
+                    }
+                    const list = asList(target);
+                    const i = checkIndex(this.resolve(toks[2]), list.items.length, list.wrapping, false);
                     list.items[i] = this.resolve(toks[3]);
                     this.pc++;
                     break;
                 }
+
+                case 'slice': {
+                    this.require(toks, 5, raw);
+                    this.frame().locals.set(toks[1], sliceOf(
+                        this.resolve(toks[2]), this.resolve(toks[3]), this.resolve(toks[4])));
+                    this.pc++;
+                    break;
+                }
+
+                case 'halt':
+                    this.finished = true;
+                    return 'done';
 
                 case 'list_push': {
                     this.require(toks, 3, raw);
@@ -294,7 +315,7 @@ export class IRExecutor {
                     this.require(toks, 4, raw);
                     const list = asList(this.resolve(toks[1]));
                     if (list.locked) throw new VoxRuntimeError('cannot insert into a locked list');
-                    const i = checkIndex(this.resolve(toks[2]), list, true);
+                    const i = checkIndex(this.resolve(toks[2]), list.items.length, list.wrapping, true);
                     list.items.splice(i, 0, this.resolve(toks[3]));
                     this.pc++;
                     break;
@@ -306,7 +327,7 @@ export class IRExecutor {
                     if (list.locked) throw new VoxRuntimeError('cannot pop from a locked list');
                     if (list.items.length === 0) throw new VoxRuntimeError('cannot pop from an empty list');
                     const i = toks.length >= 4
-                        ? checkIndex(this.resolve(toks[3]), list, false)
+                        ? checkIndex(this.resolve(toks[3]), list.items.length, list.wrapping, false)
                         : list.items.length - 1;
                     this.frame().locals.set(toks[1], list.items.splice(i, 1)[0]);
                     this.pc++;
@@ -315,9 +336,8 @@ export class IRExecutor {
 
                 case 'list_has': {
                     this.require(toks, 4, raw);
-                    const list = asList(this.resolve(toks[2]));
-                    const wanted = this.resolve(toks[3]);
-                    this.frame().locals.set(toks[1], list.items.some(item => equal(item, wanted)));
+                    this.frame().locals.set(toks[1],
+                        sequenceHas(this.resolve(toks[2]), this.resolve(toks[3])));
                     this.pc++;
                     break;
                 }

@@ -415,6 +415,82 @@ public class IRBuilder extends VoxBaseVisitor<String> {
         return dest;
     }
 
+    /**
+     * `xs from a to b` and `xs from a until b`. The IR's end is always
+     * exclusive, so the inclusive `to` adds one first - the same two words
+     * the range loops use, meaning the same thing.
+     */
+    @Override
+    public String visitSliceExpr(VoxParser.SliceExprContext ctx) {
+        String seq = visit(ctx.expression(0));
+        String from = visit(ctx.low);
+        String to = visit(ctx.high);
+        if (ctx.dir.getType() == VoxParser.TO) {
+            String end = newTemp();
+            emit("add " + end + " " + to + " 1");
+            to = end;
+        }
+        String dest = newTemp();
+        emit("slice " + dest + " " + seq + " " + from + " " + to);
+        return dest;
+    }
+
+    @Override
+    public String visitSplitExpr(VoxParser.SplitExprContext ctx) {
+        return emitBuiltin("split", visit(ctx.expression(0)), visit(ctx.expression(1)));
+    }
+
+    @Override
+    public String visitJoinExpr(VoxParser.JoinExprContext ctx) {
+        return emitBuiltin("join", visit(ctx.expression(0)), visit(ctx.expression(1)));
+    }
+
+    @Override
+    public String visitAffixExpr(VoxParser.AffixExprContext ctx) {
+        String name = "starts".equals(ctx.affix.getText()) ? "starts" : "ends";
+        return emitBuiltin(name, visit(ctx.expression(0)), visit(ctx.expression(1)));
+    }
+
+    @Override
+    public String visitRoundedExpr(VoxParser.RoundedExprContext ctx) {
+        return emitBuiltin("rounded", visit(ctx.expression(0)), visit(ctx.expression(1)));
+    }
+
+    @Override
+    public String visitRandomExpr(VoxParser.RandomExprContext ctx) {
+        return emitBuiltin("random", visit(ctx.low), visit(ctx.high));
+    }
+
+    /** `pop the 1st item of xs` is `pop xs at 0`. */
+    @Override
+    public String visitPopOrdinal(VoxParser.PopOrdinalContext ctx) {
+        String list = visit(ctx.expression());
+        String dest = newTemp();
+        emit("list_pop " + dest + " " + list + " " + ordinalIndex(ctx.ORDINAL().getText()));
+        return dest;
+    }
+
+    @Override
+    public String visitSeedStmt(VoxParser.SeedStmtContext ctx) {
+        emitBuiltin("seed", visit(ctx.expression()));
+        return null;
+    }
+
+    /** `stop the program;` ends the run wherever it is, however deep. */
+    @Override
+    public String visitHaltStmt(VoxParser.HaltStmtContext ctx) {
+        emit("halt");
+        return null;
+    }
+
+    private String emitBuiltin(String name, String... args) {
+        String dest = newTemp();
+        StringBuilder sb = new StringBuilder("builtin ").append(dest).append(' ').append(name);
+        for (String a : args) sb.append(' ').append(a);
+        emit(sb.toString());
+        return dest;
+    }
+
     @Override
     public String visitIndexExpr(VoxParser.IndexExprContext ctx) {
         String list = visit(ctx.expression(0));

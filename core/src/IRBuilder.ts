@@ -13,7 +13,9 @@ import VoxParser, {
     TakeFromContext, MultiplyByContext, DivideByContext, DoubleStmtContext,
     HalveStmtContext, PushToContext, InsertIntoContext, PushCallContext,
     InsertCallContext, PopCallContext, ListStatementContext, MethodCallContext,
-    PositionExprContext, PrintStatementContext,
+    PositionExprContext, SliceExprContext, SplitExprContext, JoinExprContext,
+    AffixExprContext, RoundedExprContext, RandomExprContext, PopOrdinalContext,
+    SeedStmtContext, HaltStmtContext, PrintStatementContext,
     ReturnStatementContext, ParenExprContext, IndexExprContext,
     CastExprContext, BuiltinExprContext, OrdinalExprContext, PopExprContext,
     AskExprContext, NegExprContext, SquaredExprContext, NotExprContext,
@@ -345,6 +347,66 @@ export class IRBuilder extends VoxVisitor<string | null> {
         this.emit(`builtin ${dest} position ${list} ${value}`);
         return dest;
     };
+
+    /**
+     * `xs from a to b` and `xs from a until b`. The IR's end is always
+     * exclusive, so the inclusive `to` adds one first - the same two words
+     * the range loops use, meaning the same thing.
+     */
+    visitSliceExpr = (ctx: SliceExprContext): string => {
+        const seq = this.visit(ctx.expression(0));
+        const from = this.visit(ctx._low);
+        let to = this.visit(ctx._high)!;
+        if (ctx._dir.type === VoxParser.TO) {
+            const end = this.newTemp();
+            this.emit(`add ${end} ${to} 1`);
+            to = end;
+        }
+        const dest = this.newTemp();
+        this.emit(`slice ${dest} ${seq} ${from} ${to}`);
+        return dest;
+    };
+
+    visitSplitExpr = (ctx: SplitExprContext): string =>
+        this.emitBuiltin('split', [this.visit(ctx.expression(0))!, this.visit(ctx.expression(1))!]);
+
+    visitJoinExpr = (ctx: JoinExprContext): string =>
+        this.emitBuiltin('join', [this.visit(ctx.expression(0))!, this.visit(ctx.expression(1))!]);
+
+    visitAffixExpr = (ctx: AffixExprContext): string =>
+        this.emitBuiltin(ctx._affix.text === 'starts' ? 'starts' : 'ends',
+            [this.visit(ctx.expression(0))!, this.visit(ctx.expression(1))!]);
+
+    visitRoundedExpr = (ctx: RoundedExprContext): string =>
+        this.emitBuiltin('rounded', [this.visit(ctx.expression(0))!, this.visit(ctx.expression(1))!]);
+
+    visitRandomExpr = (ctx: RandomExprContext): string =>
+        this.emitBuiltin('random', [this.visit(ctx._low)!, this.visit(ctx._high)!]);
+
+    /** `pop the 1st item of xs` is `pop xs at 0`. */
+    visitPopOrdinal = (ctx: PopOrdinalContext): string => {
+        const list = this.visit(ctx.expression());
+        const dest = this.newTemp();
+        this.emit(`list_pop ${dest} ${list} ${ordinalIndex(ctx.ORDINAL().getText())}`);
+        return dest;
+    };
+
+    visitSeedStmt = (ctx: SeedStmtContext): null => {
+        this.emitBuiltin('seed', [this.visit(ctx.expression())!]);
+        return null;
+    };
+
+    /** `stop the program;` ends the run wherever it is, however deep. */
+    visitHaltStmt = (_ctx: HaltStmtContext): null => {
+        this.emit('halt');
+        return null;
+    };
+
+    private emitBuiltin(name: string, args: string[]): string {
+        const dest = this.newTemp();
+        this.emit(`builtin ${dest} ${name}` + args.map(a => ' ' + a).join(''));
+        return dest;
+    }
 
     visitIndexExpr = (ctx: IndexExprContext): string => {
         const list = this.visit(ctx.expression(0));

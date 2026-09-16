@@ -30,6 +30,8 @@ statement
     | returnStatement ';'       # returnStmt
     | repeatLoop                # repeatStmt
     | SWAP target AND target ';'  # swapStmt
+    | SEED_RANDOM expression ';' # seedStmt
+    | STOP_PROGRAM ';'          # haltStmt
     | BREAK ';'                 # breakStmt
     | CONTINUE ';'              # continueStmt
     | expression ';'            # exprStmt
@@ -135,7 +137,7 @@ pushStatement
 // One-list verbs: `lock xs;`, `sort the scores;`. `lock(xs)` is the same
 // statement with a parenthesised operand, and `xs.lock()` is the dot form.
 listStatement
-    : verb=(LOCK | UNLOCK | WRAP | UNWRAP | SORT | REVERSE) THE? expression ;
+    : verb=(LOCK | UNLOCK | WRAP | UNWRAP | SORT | REVERSE | SHUFFLE) THE? expression ;
 
 printStatement  : PRINT '(' expression (',' expression)* ')'
                 | SAY expression (',' expression)*
@@ -156,10 +158,13 @@ expression
     | expression '[' expression ']'               # indexExpr
     | expression AS datatype                      # castExpr
     | expression op=(SQUARED | CUBED)             # squaredExpr
+    | expression ROUNDED_TO expression PLACES     # roundedExpr
     | builtinName expression                      # builtinExpr
+    | RANDOM_BETWEEN low=expression AND high=expression   # randomExpr
     | POSITION_OF expression IN expression        # positionExpr
     | ORDINAL ITEM_OF expression                  # ordinalExpr
     | POP '(' expression (',' expression)? ')'    # popCall
+    | POP THE? ORDINAL ITEM_OF expression         # popOrdinal
     | POP expression (AT expression)?             # popExpr
     | ASK expression                              # askExpr
     | <assoc=right> expression POW expression     # powExpr
@@ -174,6 +179,14 @@ expression
     | expression op=(EQ|NE) BETWEEN low=expression AND high=expression        # betweenExpr
     | expression op=(EQ|NE) IN expression                                     # inExpr
     | expression CONTAINS expression                                          # containsExpr
+    // `s starts with "a"`. To negate, parenthesise: `not (s ends with "z")`.
+    | expression affix=START_END WITH expression                              # affixExpr
+    // A slice of a list or a string. `to` is inclusive, `until` exclusive -
+    // the same two words the range loops use. The bounds are full
+    // expressions, so this binds loosely.
+    | expression FROM low=expression dir=(TO | UNTIL) high=expression         # sliceExpr
+    | expression SPLIT_BY expression                                          # splitExpr
+    | expression JOINED_WITH expression                                       # joinExpr
     | expression op=(LE|GE|LT|GT) expression      # relExpr
     | expression op=(EQ|NE) expression            # eqExpr
     | expression AND expression                   # andExpr
@@ -192,11 +205,12 @@ expression
 // round(x), floor(x), ceiling(x), min(a, b), max(a, b), length(s),
 // uppercase(s), lowercase(s)) are ordinary calls resolved by name.
 builtinName : SQRT_OF | ABS_OF | LENGTH_OF | FLOOR_OF | CEIL_OF | UPPER_OF | LOWER_OF | COPY_OF
-            | SUM_OF | LARGEST_OF | SMALLEST_OF ;
+            | SUM_OF | LARGEST_OF | SMALLEST_OF
+            | CHARACTERS_OF | TRIM_OF | REVERSED_OF | RANDOM_ITEM_OF ;
 
 // What may follow a dot. The list verbs are keywords, so they are listed.
 methodName  : ID | PUSH | INSERT | POP | LOCK | UNLOCK | WRAP | UNWRAP | SORT | REVERSE
-            | LOCKED | WRAPPING ;
+            | LOCKED | WRAPPING | SHUFFLE ;
 
 // `list<integer>`, `list of integers` and `integer[]` are the same type, and
 // they nest: `integer[][]` is a list of lists.
@@ -260,7 +274,9 @@ BETWEEN   : 'between' ;
 LIST         : 'list' ;
 LIST_OF      : 'list' S 'of' ;
 IS_A_LIST_OF : 'is' S 'a' S 'list' S 'of' ;
-ITEM_OF      : ('item' | 'value') S 'of' ;
+// `1st item of xs` and `1st character of s` are the same form: the analyzer
+// decides from what it is applied to. `character` on its own stays a type.
+ITEM_OF      : ('item' | 'value' | 'character' | 'letter') S 'of' ;
 COPY_OF      : 'copy' S 'of' ;
 FOR_EACH     : 'for' S ('each' | 'every') ;
 IN           : 'in' ;
@@ -287,6 +303,24 @@ SUM_OF      : 'sum' S 'of' ;
 LARGEST_OF  : 'largest' S 'of' ;
 SMALLEST_OF : 'smallest' S 'of' ;
 POSITION_OF : 'position' S 'of' ;
+
+// Strings as sequences, randomness and a few utilities. Only the multi-word
+// forms are tokens, so `split`, `join`, `trim` and `random` stay ordinary
+// names: `split(s, " ")` and `s.split(" ")` are plain calls.
+CHARACTERS_OF : ('characters' | 'letters') S 'of' ;
+TRIM_OF       : 'trim' S 'of' ;
+REVERSED_OF   : 'reversed' S 'of' ;
+START_END     : 'starts' | 'ends' ;
+WITH          : 'with' ;
+SPLIT_BY      : 'split' S 'by' ;
+JOINED_WITH   : 'joined' S 'with' ;
+SHUFFLE       : 'shuffle' ;
+RANDOM_BETWEEN  : ('a' | 'the') S 'random' S ('number' | 'integer') S 'between' ;
+RANDOM_ITEM_OF  : ('a' | 'the') S 'random' S ('item' | 'value' | 'character') S 'of' ;
+SEED_RANDOM     : 'seed' S 'random' S 'with' ;
+ROUNDED_TO    : 'rounded' S 'to' ;
+PLACES        : 'places' | 'place' | 'decimal' S 'places' ;
+STOP_PROGRAM  : 'stop' S 'the' S 'program' | 'end' S 'the' S 'program' ;
 
 // In-place updates: symbolic ...
 INC        : '++' ;

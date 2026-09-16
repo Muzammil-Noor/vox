@@ -32,6 +32,34 @@ export class VoxRuntimeError extends Error {
 }
 
 /**
+ * Randomness: a 32-bit xorshift, written the same way in both engines so a
+ * seeded program deals the same numbers in Java and in the browser. Unseeded
+ * it starts from the clock, so a program feels random until it asks not to be.
+ */
+let rngState = ((Date.now() ^ 0x9e3779b9) >>> 0) || 1;
+
+export function seedRandom(n: VoxValue): void {
+    if (typeof n !== 'bigint') {
+        throw new VoxRuntimeError(`a random seed must be an integer but got ${describe(n)}`);
+    }
+    rngState = Number(BigInt.asUintN(32, n)) || 1;
+}
+
+function nextUint32(): number {
+    let x = rngState;
+    x = (x ^ (x << 13)) >>> 0;
+    x = (x ^ (x >>> 17)) >>> 0;
+    x = (x ^ (x << 5)) >>> 0;
+    rngState = x;
+    return x;
+}
+
+/** A uniform integer in [0, bound), for bound > 0. */
+function nextBelow(bound: bigint): bigint {
+    return BigInt(nextUint32()) % bound;
+}
+
+/**
  * A safety valve for exact integer exponentiation: 2 ^ 1000000000 would
  * allocate a gigabyte-sized bigint and freeze the host. The Java CLI never hit
  * this because its ints silently overflowed instead.
@@ -281,25 +309,92 @@ export function asList(v: VoxValue): VoxList {
 }
 
 /**
- * Validates a list index: an integer from 0 to length - 1 (or to length when
- * inserting, so an item can go at the end). A wrapping list counts around
- * its ends instead - `-1` is the last item - except for insert positions,
- * where wrapping the end to the front would put items in the wrong place.
+ * Validates an index into a list or a string: an integer from 0 to
+ * length - 1 (or to length when inserting, so an item can go at the end). A
+ * wrapping list counts around its ends instead - `-1` is the last item -
+ * except for insert positions, where wrapping the end to the front would put
+ * items in the wrong place.
  */
-export function checkIndex(index: VoxValue, list: VoxList, allowEnd: boolean): number {
+export function checkIndex(index: VoxValue, length: number, wrapping: boolean,
+                           allowEnd: boolean, what = 'a list'): number {
     if (typeof index !== 'bigint') {
         throw new VoxRuntimeError(`index must be an integer but got ${describe(index)}`);
     }
-    const length = list.items.length;
-    if (list.wrapping && !allowEnd && length > 0) {
+    if (wrapping && !allowEnd && length > 0) {
         const n = BigInt(length);
         return Number(((index % n) + n) % n);
     }
     const limit = allowEnd ? length : length - 1;
     if (index < 0n || index > BigInt(limit)) {
-        throw new VoxRuntimeError(`index ${index} is out of range for a list of ${length}`);
+        throw new VoxRuntimeError(`index ${index} is out of range for ${what} of ${length}`);
     }
     return Number(index);
+}
+
+/** How many items or characters a value has, for the operations that take both. */
+export function sequenceLength(v: VoxValue): number {
+    if (isList(v)) return v.items.length;
+    if (typeof v === 'string') return v.length;
+    throw new VoxRuntimeError(`cannot index ${describe(v)}; only lists and strings have items`);
+}
+
+/** One item of a list, or one character of a string, as a value. */
+export function itemAt(seq: VoxValue, index: VoxValue): VoxValue {
+    if (typeof seq === 'string') {
+        return seq[checkIndex(index, seq.length, false, false, 'a string')];
+    }
+    const list = asList(seq);
+    return list.items[checkIndex(index, list.items.length, list.wrapping, false)];
+}
+
+/** `xs from a until b`: a fresh list, or a substring. The end is exclusive. */
+export function sliceOf(seq: VoxValue, from: VoxValue, to: VoxValue): VoxValue {
+    const isText = typeof seq === 'string';
+    const length = sequenceLength(seq);
+    const what = isText ? 'a string' : 'a list';
+    const start = checkIndex(from, length, false, true, what);
+    const end = checkIndex(to, length, false, true, what);
+    if (end < start) {
+        throw new VoxRuntimeError(`a slice cannot end (${end}) before it starts (${start})`);
+    }
+    return isText ? (seq as string).slice(start, end) : new VoxList(asList(seq).items.slice(start, end));
+}
+
+/** Whether a list holds a value, or a string holds a substring. */
+export function sequenceHas(seq: VoxValue, wanted: VoxValue): boolean {
+    if (typeof seq === 'string') {
+        if (typeof wanted !== 'string') {
+            throw new VoxRuntimeError(`a string can only contain text, but got ${describe(wanted)}`);
+        }
+        return seq.includes(wanted);
+    }
+    return asList(seq).items.some(item => equal(item, wanted));
+}
+
+/** Splits into UTF-16 units, the unit both engines count and index by. */
+function charsOf(s: string): VoxValue[] {
+    return s.split('');
+}
+
+/** Java's trim(): everything at or below a space goes. Written out so both engines agree. */
+function trimText(s: string): string {
+    let a = 0;
+    let b = s.length;
+    while (a < b && s.charCodeAt(a) <= 32) a++;
+    while (b > a && s.charCodeAt(b - 1) <= 32) b--;
+    return s.slice(a, b);
+}
+
+function splitText(s: string, separator: string): VoxValue[] {
+    if (separator === '') return charsOf(s);
+    const out: VoxValue[] = [];
+    let i = 0;
+    for (;;) {
+        const j = s.indexOf(separator, i);
+        if (j < 0) { out.push(s.slice(i)); return out; }
+        out.push(s.slice(i, j));
+        i = j + separator.length;
+    }
 }
 
 /** The builtin functions. Spoken forms and dot calls map onto the same names. */
@@ -405,8 +500,92 @@ export function builtin(name: string, args: VoxValue[]): VoxValue {
         }
         case 'position': {
             arity(2);
-            const index = list(args[0]).items.findIndex(v => equal(v, args[1]));
-            return BigInt(index); // -1 when absent
+            // In a string this looks for text; in a list, for an item.
+            if (typeof args[0] === 'string') {
+                if (typeof args[1] !== 'string') {
+                    throw new VoxRuntimeError(`'position' needs text to look for but got ${describe(args[1])}`);
+                }
+                return BigInt(args[0].indexOf(args[1]));
+            }
+            return BigInt(list(args[0]).items.findIndex(v => equal(v, args[1]))); // -1 when absent
+        }
+
+        // ---- strings as sequences -------------------------------------------
+        case 'characters': arity(1); return new VoxList(charsOf(str(args[0])));
+        case 'trim':       arity(1); return trimText(str(args[0]));
+        case 'starts':     arity(2); return str(args[0]).startsWith(str(args[1]));
+        case 'ends':       arity(2); return str(args[0]).endsWith(str(args[1]));
+        case 'split':      arity(2); return new VoxList(splitText(str(args[0]), str(args[1])));
+        case 'join': {
+            arity(2);
+            const separator = str(args[1]);
+            return list(args[0]).items.map(display).join(separator);
+        }
+        case 'replace': {
+            arity(3);
+            const text = str(args[0]);
+            const from = str(args[1]);
+            const to = str(args[2]);
+            if (from === '') throw new VoxRuntimeError("'replace' needs something to look for");
+            let out = '';
+            let i = 0;
+            for (;;) {
+                const j = text.indexOf(from, i);
+                if (j < 0) return out + text.slice(i);
+                out += text.slice(i, j) + to;
+                i = j + from.length;
+            }
+        }
+        case 'reversed': {
+            arity(1);
+            const v = args[0];
+            if (typeof v === 'string') return charsOf(v).reverse().join('');
+            return new VoxList([...list(v).items].reverse());
+        }
+
+        // ---- randomness -----------------------------------------------------
+        case 'random': {
+            arity(2);
+            const lo = num(args[0]);
+            const hi = num(args[1]);
+            if (typeof lo !== 'bigint' || typeof hi !== 'bigint') {
+                throw new VoxRuntimeError('a random number needs whole bounds');
+            }
+            const range = hi - lo + 1n;
+            if (range <= 0n) {
+                throw new VoxRuntimeError(`no numbers between ${lo} and ${hi}`);
+            }
+            return lo + nextBelow(range);
+        }
+        case 'pick': {
+            arity(1);
+            const items = list(args[0]).items;
+            if (items.length === 0) throw new VoxRuntimeError('a random item of an empty list');
+            return items[Number(nextBelow(BigInt(items.length)))];
+        }
+        case 'shuffle': {
+            arity(1);
+            const items = list(args[0]).items;
+            // Fisher-Yates, stepping the same way in both engines.
+            for (let i = items.length - 1; i > 0; i--) {
+                const j = Number(nextBelow(BigInt(i + 1)));
+                const t = items[i];
+                items[i] = items[j];
+                items[j] = t;
+            }
+            return null;
+        }
+        case 'seed': arity(1); seedRandom(args[0]); return null;
+
+        // ---- rounding to a number of places ---------------------------------
+        case 'rounded': {
+            arity(2);
+            const places = args[1];
+            if (typeof places !== 'bigint' || places < 0n || places > 15n) {
+                throw new VoxRuntimeError(`'rounded' needs a place count from 0 to 15 but got ${describe(places)}`);
+            }
+            const factor = Math.pow(10, Number(places));
+            return Math.round(Number(num(args[0])) * factor) / factor;
         }
         default:
             throw new VoxRuntimeError('unknown builtin: ' + name);
