@@ -22,6 +22,8 @@
 - Lists: `integer[] xs`, `list<integer>` or `xs is a list of integers`; `xs[i]` and `2nd item of xs`; `push`, `pop`, `insert`; `for each x in xs`
 - Dot calls: `a.f(b)` means `f(a, b)`, so `xs.push(5)`, `s.length()` and your own `n.twice()` all work
 - `lock`/`unlock` a list's size, `wrap`/`unwrap` its indexes, `fixed` arrays, `constant` names; `sort`, `reverse`, `sum of`, `largest of`, `position of`
+- Strings are sequences: `s[i]`, `1st character of s`, `for each ch in s`, `s from 0 until 5`, `split by`, `joined with`, `trim of`, `reversed of`, `starts with`
+- Randomness you can replay: `a random number between 1 and 6`, `shuffle xs`, `seed random with 7`; plus `x rounded to 2 places` and `stop the program;`
 - Functions, procedures, forward declarations and recursion
 - `main { }` may also be spelled `program { }` or `code { }`
 - Input/Output operations
@@ -253,7 +255,7 @@ main {
 | 9     | `*` `/` `%` / `multiplied by` / `times` / `divided by` / `remainder from`                                              |
 | 10    | `+` `-` / `added to` / `plus` / `minus`                                                                                |
 | 11    | `subtracted from`                                                                                                      |
-| 12    | predicates: `is even`, `is odd`, `is positive`, `is negative`, `is empty`, `is divisible by`, `is between ... and ...`, `is in`, `contains` |
+| 12    | predicates: `is even`, `is odd`, `is positive`, `is negative`, `is empty`, `is divisible by`, `is between ... and ...`, `is in`, `contains`, `starts with`, `ends with`, `from ... to ...` (slice), `split by`, `joined with` |
 | 13    | `<` `>` `<=` `>=` / `is less than` / `is greater than` / ...                                                           |
 | 14    | `==` `!=` / `is` / `is equal to` / `equals` / `equals to` / `is not`                                                   |
 | 15    | `&&` `&` / `and`                                                                                                       |
@@ -434,8 +436,11 @@ The verbs, the range-loop words, the voice words and the list words (`add`,
 `double`, `to`, `from`, `by`, `the`, `step`, `until`, `say`, `ask`, `set`,
 `let`, `be`, `swap`, `repeat`, `even`, `odd`, `list`, `in`, `at`, `push`,
 `pop`, `insert`, `into`, `contains`, `lock`, `wrap`, `sort`, `reverse`,
-`fixed`, `constant`, `always`, ...) are keywords, so they cannot name a
-variable or a function.
+`shuffle`, `fixed`, `constant`, `always`, `starts`, `ends`, `with`,
+`places`, ...) are keywords, so they cannot name a variable or a function.
+The multi-word forms are single tokens, so `split`, `join`, `trim`, `random`
+and `seed` stay ordinary names: `split(s, " ")` and `s.split(" ")` are plain
+calls.
 
 ### Range loops
 
@@ -486,6 +491,50 @@ pushing to the list extends the loop.
 `sort xs;` and `reverse xs;` change a list in place; `sum of xs`, `largest of
 xs`, `smallest of xs` and `position of x in xs` (`-1` when absent) read it.
 Each also has a function form and a dot form: `sum(xs)`, `xs.sum()`.
+
+### Text
+
+A string is a sequence of characters, and the list vocabulary applies to it:
+
+```java
+string s <- "Hello, Vox";
+say s[0], " ", 1st character of s;     // H H - both count to the same place
+say length of s;                       // 10
+for each ch in s { print(ch, "."); }
+
+say s from 0 until 5;                  // Hello  (`to` includes the far end)
+say s contains "Vox", " ", s starts with "He", " ", s ends with "x";
+say position of "Vox" in s;            // 7, or -1 when absent
+
+say trim of "  padded  ";
+say reversed of "stressed";            // desserts
+say replace("banana", "na", "NA");
+string[] words <- "the quick fox" split by " ";
+say words joined with "+";             // the+quick+fox
+say characters of "hi";                // ["h", "i"]
+```
+
+Strings never change in place: `s[0] <- "z"` is a compile error, because
+every one of these returns a new string. `character` is a spelling of
+`string` - a one-character string is just a string.
+
+### Randomness
+
+```java
+seed random with 7;                    // omit this and every run differs
+say a random number between 1 and 6;   // both bounds included
+say a random item of words;
+shuffle deck;
+```
+
+The generator is a 32-bit xorshift written out in both engines, so a seeded
+program deals the same numbers in Java and in the browser - which is what lets
+a game have a regression test.
+
+### Rounding and stopping
+
+`x rounded to 2 places` gives a float rounded to that many decimals.
+`stop the program;` ends the run wherever it is, however deep inside a call.
 
 ### Dot calls
 

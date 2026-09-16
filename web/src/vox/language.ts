@@ -15,6 +15,8 @@ const DECL_STARTERS = ['let there be an', 'let there be a', 'consider an', 'cons
 const KEYWORD_PHRASES = [
   'some user input', 'a user input', 'after iteration', 'an input', 'in steps of', 'down to',
   'is a list of', 'for every', 'for each', 'list of', 'item of', 'value of',
+  'a random number between', 'the random number between', 'seed random with',
+  'stop the program', 'end the program', 'character of', 'letter of',
 ];
 const ASSIGN_PHRASES = ['which is equal to', 'which equals'];
 const TYPE_PHRASES = ['floating point number', 'character string', 'boolean number', 'whole number'];
@@ -24,12 +26,15 @@ const OPERATOR_PHRASES = [
   'is incremented', 'subtracted from', 'remainder from', 'is less than',
   'multiplied by', 'is equal to', 'is added to', 'divided by', 'is doubled',
   'is halved', 'equals to', 'added to', 'is not',
+  'joined with', 'starts with', 'rounded to', 'ends with', 'split by',
 ];
 // Spoken forms of the builtin functions.
 const BUILTIN_PHRASES = [
   'absolute value of', 'square root of', 'uppercase of', 'lowercase of',
   'ceiling of', 'length of', 'floor of', 'copy of',
   'smallest of', 'position of', 'largest of', 'sum of',
+  'a random character of', 'a random value of', 'a random item of',
+  'characters of', 'reversed of', 'letters of', 'trim of',
 ];
 
 export const PHRASES = [
@@ -52,6 +57,7 @@ export const KEYWORDS = new Set([
   // lists
   'list', 'in', 'at', 'push', 'insert', 'into', 'pop', 'contains',
   'lock', 'unlock', 'wrap', 'unwrap', 'locked', 'wrapping', 'sort', 'reverse', 'fixed',
+  'shuffle', 'starts', 'ends', 'with', 'places', 'place',
   // constants
   'constant', 'always',
 ]);

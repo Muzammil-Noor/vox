@@ -469,6 +469,95 @@ export const CATEGORIES: DocCategory[] = [
   },
 
   {
+    id: "text",
+    title: "Text",
+    intro: "Strings are sequences, with the same words lists use.",
+    sections: [
+      {
+        id: "string-items",
+        title: "Characters",
+        body: [
+          "A string is a sequence of characters, and everything you know about list items works on it: `s[i]` counts from zero, `1st character of s` counts from one, `length of s` is how many there are, and `for each ch in s` walks them.",
+          "A character is simply a one-character string - there is no separate type to convert between. `character` is accepted as a spelling of `string`, so `character initial <- s[0];` means what it looks like.",
+        ],
+        snippet: "string-items",
+        notes: [
+          "Strings never change in place: `s[0] <- \"z\"` is a compile error. Build a new string instead.",
+          "`letters of` and `characters of` are the same thing, as are `1st letter of` and `1st character of`.",
+        ],
+      },
+      {
+        id: "string-slices",
+        title: "Slices",
+        body: [
+          "`s from a to b` takes a run of a sequence, using the same two words the range loops use: `to` includes the far end, `until` stops before it. It works on lists and strings alike.",
+          "A slice is always a fresh list or a new string, so changing it leaves the original alone. The bounds must lie within the sequence; a slice that ends before it starts is a runtime error.",
+        ],
+        snippet: "string-slices",
+      },
+      {
+        id: "string-search",
+        title: "Searching text",
+        body: [
+          "`contains` and `position of ... in ...` mean for text what they mean for lists: is it in there, and where. In a string they look for a run of characters rather than one item.",
+          "`starts with` and `ends with` ask about the ends. To negate any of them, parenthesise: `not (line starts with \"a\")`.",
+        ],
+        snippet: "string-search",
+      },
+      {
+        id: "string-building",
+        title: "Building new strings",
+        body: [
+          "`split by` turns text into a list of pieces and `joined with` turns a list back into text - between them they cover most of what a first program does with words. Splitting by nothing at all gives the individual characters.",
+          "`trim of`, `reversed of` and `replace` each return a new string. `reversed of` works on a list too.",
+        ],
+        snippet: "string-building",
+        table: {
+          head: ["Spoken", "Also", "Result"],
+          rows: [
+            ["`s split by sep`", "`split(s, sep)`, `s.split(sep)`", "a list of strings"],
+            ["`xs joined with sep`", "`join(xs, sep)`, `xs.join(sep)`", "one string"],
+            ["`trim of s`", "`trim(s)`, `s.trim()`", "without leading or trailing spaces"],
+            ["`reversed of s`", "`reversed(s)`, `s.reversed()`", "a new string, or a new list"],
+            ["`characters of s`", "`characters(s)`", "a list of one-character strings"],
+            ["-", "`replace(s, from, to)`", "every occurrence replaced"],
+            ["`uppercase of s`, `lowercase of s`", "`uppercase(s)`", "a new string"],
+          ],
+        },
+      },
+    ],
+  },
+
+  {
+    id: "chance",
+    title: "Randomness and utilities",
+    intro: "Dice that can be replayed, and two small conveniences.",
+    sections: [
+      {
+        id: "random",
+        title: "Random numbers",
+        body: [
+          "`a random number between 1 and 6` rolls a die, `a random item of xs` draws from a list and `shuffle xs` reorders one in place. Unseeded, a program is different every run.",
+          "`seed random with 7` makes it repeat exactly - the same rolls, in the same order, in both engines. That is what lets a guessing game have a regression test, and it is why the example below prints the same numbers for you as it did here.",
+        ],
+        snippet: "random",
+        notes: [
+          "Both bounds are included: `a random number between 1 and 6` can be 1 or 6.",
+          "The generator is a 32-bit xorshift, written out in both engines so their sequences match.",
+        ],
+      },
+      {
+        id: "utilities",
+        title: "Rounding and stopping",
+        body: [
+          "`x rounded to 2 places` gives a float rounded to that many decimals - the thing every program that prints money or an average needs. `stop the program;` ends the run wherever it is, however deep inside a call, which `return` cannot do.",
+        ],
+        snippet: "utilities",
+      },
+    ],
+  },
+
+  {
     id: "functions",
     title: "Functions",
     intro: "Values in, values out (or nothing at all)",
@@ -616,7 +705,7 @@ export const REFERENCE: {
         ["9", "`*`, `/`, `%`"],
         ["10", "`+`, `-`"],
         ["11", "`subtracted from`"],
-        ["12", "predicates: `is even`, `is between ... and ...`, `is in`, `contains`, ..."],
+        ["12", "predicates: `is even`, `is between ... and ...`, `is in`, `contains`, `starts with`, `from ... to ...` (a slice), `split by`, `joined with`"],
         ["13", "`<`, `>`, `<=`, `>=`"],
         ["14", "`==`, `!=`"],
         ["15", "`and`, `&&`"],
@@ -653,7 +742,11 @@ export const REFERENCE: {
         ],
         [
           "Lists",
-          "`list`, `in`, `at`, `push`, `insert`, `into`, `pop`, `contains`, `lock`, `unlock`, `wrap`, `unwrap`, `locked`, `wrapping`, `sort`, `reverse`, `fixed`, and the phrases `for each`, `for every`, `is a list of`, `list of`, `item of`, `value of`, `copy of`, `sum of`, `largest of`, `smallest of`, `position of`",
+          "`list`, `in`, `at`, `push`, `insert`, `into`, `pop`, `contains`, `lock`, `unlock`, `wrap`, `unwrap`, `locked`, `wrapping`, `sort`, `reverse`, `shuffle`, `fixed`, and the phrases `for each`, `for every`, `is a list of`, `list of`, `item of`, `value of`, `copy of`, `sum of`, `largest of`, `smallest of`, `position of`",
+        ],
+        [
+          "Text and chance",
+          "`starts`, `ends`, `with`, `places`, and the phrases `characters of`, `letters of`, `character of`, `letter of`, `trim of`, `reversed of`, `split by`, `joined with`, `rounded to`, `a random number between`, `a random item of`, `seed random with`, `stop the program`",
         ],
         [
           "Operators",
