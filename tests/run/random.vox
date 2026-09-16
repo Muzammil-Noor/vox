@@ -1,0 +1,23 @@
+main {
+    // A seeded program deals the same cards every run, in either engine.
+    seed random with 7;
+
+    repeat 5 times {
+        print(a random number between 1 and 6, " ");
+    }
+    print('\n');
+
+    integer[] deck <- [1, 2, 3, 4, 5, 6, 7, 8];
+    shuffle deck;
+    say deck;
+    say a random item of deck;
+    say deck.pick(), " ", random(10, 20);
+
+    // Reseeding replays it exactly.
+    seed random with 7;
+    say a random number between 1 and 6;
+
+    say a random number between 4 and 4;
+    say 3.14159 rounded to 2 places, " ", 2.5 rounded to 0 places, " ", 1.005 rounded to 1 place;
+    say (10.0 / 3) rounded to 3 decimal places;
+}

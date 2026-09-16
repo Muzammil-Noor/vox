@@ -1,0 +1,9 @@
+procedure quit() {
+    say "quitting";
+    stop the program;
+}
+
+main {
+    quit();
+    say "never";
+}

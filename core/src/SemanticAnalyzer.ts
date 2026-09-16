@@ -15,7 +15,9 @@ import {
     AddToContext, TakeFromContext, MultiplyByContext, DivideByContext,
     DoubleStmtContext, HalveStmtContext, PushToContext, InsertIntoContext,
     PushCallContext, InsertCallContext, PopCallContext, ListStatementContext,
-    MethodCallContext, PositionExprContext,
+    MethodCallContext, PositionExprContext, SliceExprContext, SplitExprContext,
+    JoinExprContext, AffixExprContext, RoundedExprContext, RandomExprContext,
+    PopOrdinalContext, SeedStmtContext, HaltStmtContext,
     ExpressionContext, ParenExprContext, IndexExprContext, CastExprContext,
     BuiltinExprContext, BuiltinNameContext, OrdinalExprContext, PopExprContext,
     AskExprContext, NegExprContext, SquaredExprContext, NotExprContext,
@@ -44,14 +46,14 @@ interface Binding {
 
 /**
  * What a builtin accepts per parameter, and what it returns.
- *   params: 'num' | 'string' | 'sized' (string or list) | 'list'
- *         | 'sortable' (a list of scalars) | 'numlist' (a list of numbers)
- *         | 'item' (something that fits the first argument's item type)
+ *   params: 'num' | 'whole' (integer only) | 'string' | 'sized' (string or
+ *           list) | 'list' | 'sortable' (a list of scalars) | 'numlist' (a
+ *           list of numbers) | 'item' (fits the first argument's item type)
  *   result: a fixed type, 'numeric' (float if any float), 'same' (the first
  *           argument's type), 'element' (its item type) or 'void'
  */
 interface BuiltinSpec {
-    params: ('num' | 'string' | 'sized' | 'list' | 'sortable' | 'numlist' | 'item')[];
+    params: ('num' | 'whole' | 'string' | 'sized' | 'list' | 'sortable' | 'numlist' | 'item')[];
     result: string;
 }
 
@@ -82,10 +84,25 @@ export const BUILTINS: ReadonlyMap<string, BuiltinSpec> = new Map<string, Builti
     // ordering and aggregates
     ['sort',      { params: ['sortable'],   result: 'void' }],
     ['reverse',   { params: ['list'],       result: 'void' }],
+    ['shuffle',   { params: ['list'],       result: 'void' }],
     ['sum',       { params: ['numlist'],    result: 'element' }],
     ['largest',   { params: ['sortable'],   result: 'element' }],
     ['smallest',  { params: ['sortable'],   result: 'element' }],
-    ['position',  { params: ['list', 'item'], result: 'integer' }],
+    ['pick',      { params: ['list'],       result: 'element' }],
+    ['position',  { params: ['sized', 'item'], result: 'integer' }],
+    // strings as sequences
+    ['characters', { params: ['string'],                      result: listOf('string') }],
+    ['trim',       { params: ['string'],                      result: 'string' }],
+    ['starts',     { params: ['string', 'string'],            result: 'boolean' }],
+    ['ends',       { params: ['string', 'string'],            result: 'boolean' }],
+    ['split',      { params: ['string', 'string'],            result: listOf('string') }],
+    ['join',       { params: ['list', 'string'],              result: 'string' }],
+    ['replace',    { params: ['string', 'string', 'string'],  result: 'string' }],
+    ['reversed',   { params: ['sized'],                       result: 'same' }],
+    // randomness and rounding
+    ['random',    { params: ['whole', 'whole'], result: 'integer' }],
+    ['seed',      { params: ['whole'],          result: 'void' }],
+    ['rounded',   { params: ['num', 'whole'],   result: 'float' }],
 ]);
 
 /** Maps a spoken builtin token onto its symbolic name. */
@@ -100,6 +117,10 @@ export function builtinNameOf(ctx: BuiltinNameContext): string {
     if (ctx.SUM_OF()) return 'sum';
     if (ctx.LARGEST_OF()) return 'largest';
     if (ctx.SMALLEST_OF()) return 'smallest';
+    if (ctx.CHARACTERS_OF()) return 'characters';
+    if (ctx.TRIM_OF()) return 'trim';
+    if (ctx.REVERSED_OF()) return 'reversed';
+    if (ctx.RANDOM_ITEM_OF()) return 'pick';
     return 'lowercase';
 }
 
@@ -384,19 +405,31 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
         if (target instanceof IndexTargetContext) {
             const base = this.typeOfTarget(target.target(), false);
             this.requireIndex(target.expression(), this.visit(target.expression()));
-            return this.itemTypeOf(target, base);
+            return this.itemTypeOf(target, base, writing);
         }
         const ordinal = target as OrdinalTargetContext;
         this.checkOrdinal(ordinal, ordinal.ORDINAL());
-        return this.itemTypeOf(ordinal, this.typeOfTarget(ordinal.target(), false));
+        return this.itemTypeOf(ordinal, this.typeOfTarget(ordinal.target(), false), writing);
     }
 
-    /** The item type of a list type; reports when the base is not a list. */
-    private itemTypeOf(ctx: ParserRuleContext, base: string | null): string | null {
+    /**
+     * The item type behind an index: a list's item type, or a single-character
+     * string when indexing text. Reports when the base has no items at all,
+     * or when a string is being written to - strings cannot change in place.
+     */
+    private itemTypeOf(ctx: ParserRuleContext, base: string | null,
+                       writing = false): string | null {
         if (base === null || base === 'error') return null;
         if (base === 'any') return 'any';
+        if (base === 'string') {
+            if (writing) {
+                this.error(ctx, 'a string cannot be changed in place; build a new one instead');
+                return null;
+            }
+            return 'string';
+        }
         if (!isList(base)) {
-            this.error(ctx, `cannot index ${base}; only lists have items`);
+            this.error(ctx, `cannot index ${base}; only lists and strings have items`);
             return null;
         }
         return elementOf(base);
@@ -576,12 +609,53 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
         return null;
     };
 
-    /** `position of x in xs` is position(xs, x). */
+    /** `position of x in xs` is position(xs, x); in a string it finds text. */
     visitPositionExpr = (ctx: PositionExprContext): string => {
         const valueType = this.visit(ctx.expression(0));
         const listType = this.visit(ctx.expression(1));
         return this.checkBuiltin(ctx, 'position', [listType, valueType]);
     };
+
+    /** `xs from a to b` / `s from a until b`: a fresh list, or a substring. */
+    visitSliceExpr = (ctx: SliceExprContext): string => {
+        const base = this.visit(ctx.expression(0));
+        this.requireIndex(ctx._low, this.visit(ctx._low));
+        this.requireIndex(ctx._high, this.visit(ctx._high));
+        if (base === null || base === 'error') return 'error';
+        if (base === 'any') return 'any';
+        if (base === 'string' || isList(base)) return base;
+        this.error(ctx, `cannot slice ${base}; only lists and strings have items`);
+        return 'error';
+    };
+
+    visitSplitExpr = (ctx: SplitExprContext): string =>
+        this.checkBuiltin(ctx, 'split', [this.visit(ctx.expression(0)), this.visit(ctx.expression(1))]);
+
+    visitJoinExpr = (ctx: JoinExprContext): string =>
+        this.checkBuiltin(ctx, 'join', [this.visit(ctx.expression(0)), this.visit(ctx.expression(1))]);
+
+    visitAffixExpr = (ctx: AffixExprContext): string =>
+        this.checkBuiltin(ctx, ctx._affix.text === 'starts' ? 'starts' : 'ends',
+            [this.visit(ctx.expression(0)), this.visit(ctx.expression(1))]);
+
+    visitRoundedExpr = (ctx: RoundedExprContext): string =>
+        this.checkBuiltin(ctx, 'rounded', [this.visit(ctx.expression(0)), this.visit(ctx.expression(1))]);
+
+    visitRandomExpr = (ctx: RandomExprContext): string =>
+        this.checkBuiltin(ctx, 'random', [this.visit(ctx._low), this.visit(ctx._high)]);
+
+    /** `pop the 1st item of xs`: the spoken form of `pop xs at 0`. */
+    visitPopOrdinal = (ctx: PopOrdinalContext): string => {
+        this.checkOrdinal(ctx, ctx.ORDINAL());
+        return this.popResult(ctx, this.visit(ctx.expression()));
+    };
+
+    visitSeedStmt = (ctx: SeedStmtContext): null => {
+        this.checkBuiltin(ctx, 'seed', [this.visit(ctx.expression())]);
+        return null;
+    };
+
+    visitHaltStmt = (_ctx: HaltStmtContext): null => null;
 
     private popResult(ctx: ParserRuleContext, listType: string | null): string {
         if (listType === null || listType === 'error') return 'error';
@@ -641,8 +715,16 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
     private checkContains(ctx: ParserRuleContext, op: string,
                           listType: string | null, valueType: string | null): void {
         if (listType === null || listType === 'error' || listType === 'any') return;
+        if (listType === 'string') {
+            // In text, `contains` looks for a substring.
+            if (valueType !== null && valueType !== 'error' && valueType !== 'any'
+                && valueType !== 'string') {
+                this.error(ctx, `operator '${op}' can only look for text in a string, not ${valueType}`);
+            }
+            return;
+        }
         if (!isList(listType)) {
-            this.error(ctx, `operator '${op}' needs a list but got ${listType}`);
+            this.error(ctx, `operator '${op}' needs a list or a string but got ${listType}`);
             return;
         }
         if (valueType !== null && valueType !== 'error' && valueType !== 'any'
@@ -725,8 +807,10 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
         if (listType !== null && listType !== 'error' && listType !== 'any') {
             if (isList(listType)) {
                 element = elementOf(listType);
+            } else if (listType === 'string') {
+                element = 'string'; // one character at a time
             } else {
-                this.error(ctx.expression(), `for each needs a list but got ${listType}`);
+                this.error(ctx.expression(), `for each needs a list or a string but got ${listType}`);
             }
         }
 
@@ -1100,6 +1184,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
             let want: string;
             switch (kind) {
                 case 'num':    ok = isNumeric(got); want = 'a number'; break;
+                case 'whole':  ok = got === 'integer'; want = 'a whole number'; break;
                 case 'string': ok = got === 'string' || got === 'character'; want = 'string'; break;
                 case 'list':   ok = isList(got); want = 'a list'; break;
                 case 'sized':  ok = got === 'string' || got === 'character' || isList(got); want = 'a string or a list'; break;
@@ -1114,7 +1199,9 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
                     break;
                 }
                 default: { // item: must fit the first argument's item type
-                    const element = first !== null && first !== undefined && isList(first) ? elementOf(first) : 'any';
+                    const element = first === 'string' ? 'string'
+                        : first !== null && first !== undefined && isList(first) ? elementOf(first)
+                        : 'any';
                     ok = fits(element, got) !== 'no';
                     want = element;
                 }
@@ -1252,8 +1339,9 @@ export function canonical(written: string): string {
         case 'bool': case 'bools': case 'boolean': case 'booleans':
         case 'boolean number': case 'boolean numbers':
             return 'boolean';
+        // `character` is a spelling of `string`: a one-character string is
+        // just a string, so there is no separate type to trip over.
         case 'char': case 'chars': case 'character': case 'characters':
-            return 'character';
         case 'string': case 'strings': case 'character string': case 'character strings':
         case 'varchar':
             return 'string';
