@@ -1,0 +1,15 @@
+main {
+    string line <- "Hello, Vox";
+
+    say line from 0 until 5;          // up to but not including 5
+    say line from 7 to 9;             // 7, 8 and 9
+
+    integer[] scores <- [10, 20, 30, 40, 50];
+    say scores from 1 to 3;
+    say scores from 0 until 2;
+
+    // A slice is a fresh list: changing it leaves the original alone.
+    integer[] part <- scores from 0 until 2;
+    push 99 to part;
+    say part, " ", scores;
+}

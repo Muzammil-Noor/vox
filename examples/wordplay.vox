@@ -1,0 +1,36 @@
+// A word game: strings as sequences, and dice you can replay.
+integer vowelsIn(string word) {
+    integer found <- 0;
+    for each letter in word {
+        if ("aeiou" contains lowercase of letter) { increment found; }
+    }
+    return found;
+}
+
+boolean isPalindrome(string word) {
+    let cleaned be lowercase of word;
+    return cleaned is reversed of cleaned;
+}
+
+main {
+    seed random with 2026;
+
+    string[] words <- "level radio vox stressed noon" split by " ";
+    say "tonight's words: ", words joined with ", ";
+
+    for each word in words {
+        print(word, " - ", length of word, " letters, ", vowelsIn(word), " vowels");
+        if (isPalindrome(word)) { print(", a palindrome"); }
+        print('\n');
+    }
+
+    let chosen be a random item of words;
+    say "the word of the day is ", uppercase of chosen;
+    say "it starts with ", chosen[0], " and ends with ", chosen[length of chosen - 1];
+    say "backwards: ", reversed of chosen;
+    say "first half: ", chosen from 0 until (length of chosen) / 2;
+
+    sort words;
+    say "sorted: ", words joined with " ";
+    say "last alphabetically: ", largest of words;
+}

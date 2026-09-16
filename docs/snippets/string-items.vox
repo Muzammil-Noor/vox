@@ -1,0 +1,14 @@
+main {
+    string title <- "Vox Radio";
+
+    say title[0], " ", 1st character of title;   // both count to the same place
+    say 5th letter of title;
+    say length of title;
+    say characters of "hi";
+
+    // Walking a string hands you one character at a time.
+    for each ch in "vox" {
+        print(uppercase of ch, ".");
+    }
+    print('\n');
+}

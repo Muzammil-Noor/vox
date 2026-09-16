@@ -1,0 +1,17 @@
+main {
+    // Without a seed a program is different every run. With one it repeats,
+    // which is what makes a game testable - and both engines agree.
+    seed random with 7;
+
+    repeat 5 times {
+        print(a random number between 1 and 6, " ");
+    }
+    print('\n');
+
+    string[] answers <- ["yes", "no", "ask again"];
+    say a random item of answers;
+
+    integer[] deck <- [1, 2, 3, 4, 5];
+    shuffle deck;
+    say deck;
+}

@@ -1,0 +1,15 @@
+main {
+    say trim of "   padded   ", "|";
+    say reversed of "stressed";
+    say replace("banana", "na", "NA");
+
+    // split turns text into a list; joined with turns it back.
+    string[] words <- "the quick brown fox" split by " ";
+    say words;
+    say length of words, " words";
+    sort words;
+    say words joined with " ";
+
+    say "2026-09-15" split by "-";
+    say "abc" split by "";                // no separator: the characters
+}

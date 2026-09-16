@@ -1,0 +1,9 @@
+main {
+    string line <- "the quick brown fox";
+
+    say line contains "quick";
+    say line starts with "the", " ", line ends with "fox";
+    say not (line starts with "a");
+    say position of "brown" in line;
+    say position of "cat" in line;        // -1 when it is not there
+}

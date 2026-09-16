@@ -1,0 +1,16 @@
+procedure check(integer n) {
+    if (n is negative) {
+        say "that is below zero; stopping";
+        stop the program;             // ends the run, however deep the call
+    }
+    say n, " is fine";
+}
+
+main {
+    say 3.14159 rounded to 2 places;
+    say (10.0 / 3) rounded to 3 decimal places;
+
+    check(5);
+    check(-1);
+    say "never reached";
+}
