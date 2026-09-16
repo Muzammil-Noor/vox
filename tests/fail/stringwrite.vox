@@ -1,0 +1,4 @@
+main {
+    string s <- "abc";
+    s[0] <- "z";
+}

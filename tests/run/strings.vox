@@ -1,12 +1,47 @@
 main {
-    string greeting <- "hello";
-    print(greeting + " " + "world", '\n');
-    print("a" + 1, '\n');
-    print("tab:\there", '\n');
-    print("quote:\"q\"", '\n');
-    print("back\\slash", '\n');
-    print("newline:\nsecond", '\n');
-    print("x", "y", "z", '\n');
-    print("equal: ", greeting == "hello", '\n');
-    print("less: ", "apple" < "banana", '\n');
+    string s <- "Hello, Vox";
+
+    // Indexing and ordinals, exactly as for lists.
+    say s[0], s[4], " ", 1st character of s, " ", 8th letter of s;
+    say length of s, " ", characters of "hi";
+
+    // Slices: `to` is inclusive, `until` exclusive.
+    say s from 0 until 5, " ", s from 7 to 9;
+    say uppercase of (s from 0 until 5);
+
+    // Searching.
+    say s contains "Vox", " ", s contains "zzz";
+    say s starts with "Hello", " ", s ends with "Vox";
+    say not (s starts with "x");
+    say position of "Vox" in s, " ", position of "q" in s;
+
+    // Building new strings.
+    say trim of "   padded   ", "|";
+    say reversed of "stressed";
+    say replace("banana", "na", "NA");
+    say "a,b,,c" split by ",";
+    say ["one", "two", "three"] joined with " - ";
+    say "" split by ",", " ", "abc" split by "";
+
+    // Walking a string.
+    for each ch in "vox" {
+        print(uppercase of ch, ".");
+    }
+    print('\n');
+
+    integer vowels <- 0;
+    for each letter in "programming" {
+        if ("aeiou" contains letter) { increment vowels; }
+    }
+    say vowels, " vowels";
+
+    // `character` is just a spelling of `string`.
+    character initial <- s[0];
+    say initial, " ", initial is "H";
+
+    // A list of strings behaves like any other list.
+    string[] words <- "the quick brown fox" split by " ";
+    sort words;
+    say words, " ", largest of words, " ", length of words;
+    say words joined with "+";
 }

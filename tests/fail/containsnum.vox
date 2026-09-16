@@ -1,0 +1,4 @@
+main {
+    integer n <- 5;
+    say n contains 1;
+}

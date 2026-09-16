@@ -1,0 +1,3 @@
+main {
+    say a random number between 10 and 1;
+}

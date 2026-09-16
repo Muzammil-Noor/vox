@@ -1,4 +1,4 @@
 main {
     integer[] xs;
-    xs.shuffle();
+    xs.flatten();
 }
