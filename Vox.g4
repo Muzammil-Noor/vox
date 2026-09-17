@@ -124,7 +124,7 @@ updateStatement
     | target IS_HALVED                            # halveStmt
     ;
 
-// Growing a list. `push x to xs` appends; `at i` inserts before item i, and
+// Growing a list. `push x to xs` appends; `at i` inserts before item iand
 // i may equal the length. Shrinking is `pop`, an expression, so the removed
 // item can be used.
 pushStatement
@@ -135,7 +135,7 @@ pushStatement
     ;
 
 // One-list verbs: `lock xs;`, `sort the scores;`. `lock(xs)` is the same
-// statement with a parenthesised operand, and `xs.lock()` is the dot form.
+// statement with a parenthesised operandand `xs.lock()` is the dot form.
 listStatement
     : verb=(LOCK | UNLOCK | WRAP | UNWRAP | SORT | REVERSE | SHUFFLE) THE? expression ;
 
@@ -212,7 +212,7 @@ builtinName : SQRT_OF | ABS_OF | LENGTH_OF | FLOOR_OF | CEIL_OF | UPPER_OF | LOW
 methodName  : ID | PUSH | INSERT | POP | LOCK | UNLOCK | WRAP | UNWRAP | SORT | REVERSE
             | LOCKED | WRAPPING | SHUFFLE ;
 
-// `list<integer>`, `list of integers` and `integer[]` are the same type, and
+// `list<integer>`, `list of integers` and `integer[]` are the same typeand
 // they nest: `integer[][]` is a list of lists.
 datatype
     : LIST LT datatype GT                                                                        # listType

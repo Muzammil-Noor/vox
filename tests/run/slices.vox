@@ -6,7 +6,7 @@ main {
     say xs from 0 to 4, " ", xs from 2 until 2;
     say length of (xs from 1 until 4);
 
-    // Bounds may be computed, and a slice is a fresh list.
+    // Bounds may be computedand a slice is a fresh list.
     integer n <- length of xs;
     say xs from 1 until n - 1;
     integer[] part <- xs from 0 until 2;
@@ -17,7 +17,7 @@ main {
     say pop the 1st item of xs, " ", pop the 2nd item of xs;
     say xs;
 
-    // Slices of slices, and of strings.
+    // Slices of slicesand of strings.
     say (xs from 0 until 3) from 1 to 2;
     say "abcdef" from 2 until 4;
 }

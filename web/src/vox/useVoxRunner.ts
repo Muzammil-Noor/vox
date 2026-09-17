@@ -29,7 +29,7 @@ export function useVoxRunner() {
 
   const workerRef = useRef<Worker | null>(null);
   const nextId = useRef(0);
-  // The unfinished last line of program output, and whether it is on screen.
+  // The unfinished last line of program outputand whether it is on screen.
   const partial = useRef<{ text: string; shown: boolean }>({ text: "", shown: false });
 
   const line = useCallback(

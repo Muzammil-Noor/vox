@@ -156,7 +156,7 @@ export const CATEGORIES: DocCategory[] = [
         title: "Scope and call frames",
         body: [
           "Every call gets its own frame. Parameters and locals belong to that frame alone, so a function cannot reach into its caller and a recursive function has a fresh copy of each variable at every depth.",
-          "Inside a function, a name means one thing for as long as it is visible: a block cannot redeclare a variable that an enclosing block still holds, and a local cannot reuse a parameter's name. A name never quietly changes meaning between one line and the next.",
+          "Inside a function, a name means one thing for as long as it is visible: a block cannot redeclare a variable that an enclosing block still holdsand a local cannot reuse a parameter's name. A name never quietly changes meaning between one line and the next.",
         ],
         snippet: "scope",
       },
@@ -350,7 +350,7 @@ export const CATEGORIES: DocCategory[] = [
   {
     id: "lists",
     title: "Lists",
-    intro: "Ordered, growable, and shared by reference.",
+    intro: "Ordered, growableand shared by reference.",
     sections: [
       {
         id: "lists",
@@ -369,8 +369,8 @@ export const CATEGORIES: DocCategory[] = [
         id: "list-items",
         title: "Items: subscripts and ordinals",
         body: [
-          "`xs[i]` counts from zero, as subscripts do everywhere. The spoken form counts the way English does: `1st item of xs` is the first item, which is `xs[0]`. `2nd`, `3rd`, `4th` and so on follow, and the suffix is checked - `2th` is a compile error that tells you to write `2nd`.",
-          "Both forms are assignment targets, and every in-place update works on an item: `xs[i]++`, `add 5 to xs[0]`, `double the 3rd item of xs`.",
+          "`xs[i]` counts from zero, as subscripts do everywhere. The spoken form counts the way English does: `1st item of xs` is the first item, which is `xs[0]`. `2nd`, `3rd`, `4th` and so on followand the suffix is checked - `2th` is a compile error that tells you to write `2nd`.",
+          "Both forms are assignment targetsand every in-place update works on an item: `xs[i]++`, `add 5 to xs[0]`, `double the 3rd item of xs`.",
         ],
         snippet: "list-items",
       },
@@ -378,7 +378,7 @@ export const CATEGORIES: DocCategory[] = [
         id: "list-growing",
         title: "Growing and shrinking",
         body: [
-          "`push x to xs` appends; `push x to xs at i` (or `insert x into xs at i`) puts it before item `i`, and `i` may equal the length. `pop xs` removes the last item and hands it back; `pop xs at i` removes a chosen one. Each has a call spelling as well.",
+          "`push x to xs` appends; `push x to xs at i` (or `insert x into xs at i`) puts it before item `i`and `i` may equal the length. `pop xs` removes the last item and hands it back; `pop xs at i` removes a chosen one. Each has a call spelling as well.",
         ],
         snippet: "list-growing",
         table: {
@@ -426,7 +426,7 @@ export const CATEGORIES: DocCategory[] = [
         id: "list-references",
         title: "Lists are references",
         body: [
-          "A list is one thing, and a variable holds a reference to it. Assigning a list to another variable, or passing it to a function, makes a second name for the same list - changes through either name show through both. That is how a procedure can fill or sort a list for its caller.",
+          "A list is one thingand a variable holds a reference to it. Assigning a list to another variable, or passing it to a function, makes a second name for the same list - changes through either name show through both. That is how a procedure can fill or sort a list for its caller.",
           "When you want an independent list, say so: `copy of xs` makes a new list with the same items (one level deep). `is` compares lists item by item, not by identity.",
         ],
         snippet: "list-references",
@@ -436,7 +436,7 @@ export const CATEGORIES: DocCategory[] = [
         title: "Locking a list's size",
         body: [
           "`lock xs` freezes a list's size: `push`, `insert` and `pop` become runtime errors until `unlock xs`. Items stay writable - it is the shape that is fixed, not the contents - which makes a locked list exactly a C array, switchable at will.",
-          "The lock belongs to the list, not the name: every alias sees it, and a function that receives a locked list cannot grow it. `fixed integer xs[5]` declares a list that is born locked, and `xs is locked` asks.",
+          "The lock belongs to the list, not the name: every alias sees itand a function that receives a locked list cannot grow it. `fixed integer xs[5]` declares a list that is born lockedand `xs is locked` asks.",
         ],
         snippet: "locks",
       },
@@ -452,7 +452,7 @@ export const CATEGORIES: DocCategory[] = [
         id: "wrapping",
         title: "Wrapping around",
         body: [
-          "Normally an index outside `0` to `length - 1` is an error. `wrap xs` turns the list into a ring: index `i` becomes `((i mod n) + n) mod n`, so `-1` is the last item, `n` is the first again, and the ordinals follow suit. `unwrap xs` restores the strict rule, and `xs is wrapping` asks.",
+          "Normally an index outside `0` to `length - 1` is an error. `wrap xs` turns the list into a ring: index `i` becomes `((i mod n) + n) mod n`, so `-1` is the last item, `n` is the first againand the ordinals follow suit. `unwrap xs` restores the strict ruleand `xs is wrapping` asks.",
           "Wrapping applies to reading, writing, `pop at` and ordinals - never to `insert at`, whose valid positions run to the length itself, where wrapping would silently put the item at the wrong end. An empty list has nothing to wrap to and still errors.",
         ],
         snippet: "wrapping",
@@ -477,7 +477,7 @@ export const CATEGORIES: DocCategory[] = [
         id: "string-items",
         title: "Characters",
         body: [
-          "A string is a sequence of characters, and everything you know about list items works on it: `s[i]` counts from zero, `1st character of s` counts from one, `length of s` is how many there are, and `for each ch in s` walks them.",
+          "A string is a sequence of charactersand everything you know about list items works on it: `s[i]` counts from zero, `1st character of s` counts from one, `length of s` is how many there areand `for each ch in s` walks them.",
           "A character is simply a one-character string - there is no separate type to convert between. `character` is accepted as a spelling of `string`, so `character initial <- s[0];` means what it looks like.",
         ],
         snippet: "string-items",
@@ -499,7 +499,7 @@ export const CATEGORIES: DocCategory[] = [
         id: "string-search",
         title: "Searching text",
         body: [
-          "`contains` and `position of ... in ...` mean for text what they mean for lists: is it in there, and where. In a string they look for a run of characters rather than one item.",
+          "`contains` and `position of ... in ...` mean for text what they mean for lists: is it in thereand where. In a string they look for a run of characters rather than one item.",
           "`starts with` and `ends with` ask about the ends. To negate any of them, parenthesise: `not (line starts with \"a\")`.",
         ],
         snippet: "string-search",
@@ -531,14 +531,14 @@ export const CATEGORIES: DocCategory[] = [
   {
     id: "chance",
     title: "Randomness and utilities",
-    intro: "Dice that can be replayed, and two small conveniences.",
+    intro: "Dice that can be replayedand two small conveniences.",
     sections: [
       {
         id: "random",
         title: "Random numbers",
         body: [
           "`a random number between 1 and 6` rolls a die, `a random item of xs` draws from a list and `shuffle xs` reorders one in place. Unseeded, a program is different every run.",
-          "`seed random with 7` makes it repeat exactly - the same rolls, in the same order, in both engines. That is what lets a guessing game have a regression test, and it is why the example below prints the same numbers for you as it did here.",
+          "`seed random with 7` makes it repeat exactly - the same rolls, in the same order, in both engines. That is what lets a guessing game have a regression testand it is why the example below prints the same numbers for you as it did here.",
         ],
         snippet: "random",
         notes: [
@@ -614,7 +614,7 @@ export const CATEGORIES: DocCategory[] = [
         title: "Calling with a dot",
         body: [
           "`a.f(b)` means exactly `f(a, b)`: whatever stands before the dot becomes the first argument. That single rule gives every list operation and every builtin a method spelling - `xs.push(5)`, `s.length()`, `xs.sort()` - and gives your own functions one too, with no classes involved.",
-          "Parentheses are always required, so a call always looks like a call. The spoken forms and the plain function forms remain, and all three compile to the same instruction.",
+          "Parentheses are always required, so a call always looks like a call. The spoken forms and the plain function forms remainand all three compile to the same instruction.",
         ],
         snippet: "dot-calls",
         notes: [
@@ -742,11 +742,11 @@ export const REFERENCE: {
         ],
         [
           "Lists",
-          "`list`, `in`, `at`, `push`, `insert`, `into`, `pop`, `contains`, `lock`, `unlock`, `wrap`, `unwrap`, `locked`, `wrapping`, `sort`, `reverse`, `shuffle`, `fixed`, and the phrases `for each`, `for every`, `is a list of`, `list of`, `item of`, `value of`, `copy of`, `sum of`, `largest of`, `smallest of`, `position of`",
+          "`list`, `in`, `at`, `push`, `insert`, `into`, `pop`, `contains`, `lock`, `unlock`, `wrap`, `unwrap`, `locked`, `wrapping`, `sort`, `reverse`, `shuffle`, `fixed`and the phrases `for each`, `for every`, `is a list of`, `list of`, `item of`, `value of`, `copy of`, `sum of`, `largest of`, `smallest of`, `position of`",
         ],
         [
           "Text and chance",
-          "`starts`, `ends`, `with`, `places`, and the phrases `characters of`, `letters of`, `character of`, `letter of`, `trim of`, `reversed of`, `split by`, `joined with`, `rounded to`, `a random number between`, `a random item of`, `seed random with`, `stop the program`",
+          "`starts`, `ends`, `with`, `places`and the phrases `characters of`, `letters of`, `character of`, `letter of`, `trim of`, `reversed of`, `split by`, `joined with`, `rounded to`, `a random number between`, `a random item of`, `seed random with`, `stop the program`",
         ],
         [
           "Operators",
@@ -754,7 +754,7 @@ export const REFERENCE: {
         ],
         [
           "Types",
-          "`int`, `integer`, `number`, `float`, `bool`, `boolean`, `char`, `character`, `string`, `varchar`, and their plurals",
+          "`int`, `integer`, `number`, `float`, `bool`, `boolean`, `char`, `character`, `string`, `varchar`and their plurals",
         ],
         ["Literals", "`true`, `false`"],
       ],

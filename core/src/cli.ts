@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { createInterface } from 'node:readline';
 import { compile } from './compiler.js';
 import { IRExecutor } from './IRExecutor.js';
@@ -14,7 +15,8 @@ const USAGE =
     'Usage: vox <source.vox> [options]\n'
   + '  --emit-ir     print the generated IR\n'
   + '  --check       parse and type-check only, do not run\n'
-  + '  --steps <n>   change the execution step limit\n';
+  + '  --steps <n>   change the execution step limit\n'
+  + '  --version     print the version\n';
 
 function fail(code: number, message: string): never {
     process.stderr.write(message + '\n');
@@ -36,6 +38,11 @@ async function main(): Promise<void> {
 
     for (let i = 0; i < args.length; i++) {
         const a = args[i];
+        if (a === '--version') {
+            const pkg = createRequire(import.meta.url)('../package.json') as { version: string };
+            process.stdout.write(`vox ${pkg.version}\n`);
+            return;
+        }
         if (a === '--emit-ir') emitIr = true;
         else if (a === '--check') checkOnly = true;
         else if (a === '--steps' && i + 1 < args.length) {

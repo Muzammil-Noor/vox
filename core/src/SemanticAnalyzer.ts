@@ -38,14 +38,14 @@ interface Signature {
     paramTypes: string[];
 }
 
-/** A variable in scope: its type, and whether assignment to it is forbidden. */
+/** A variable in scope: its typeand whether assignment to it is forbidden. */
 interface Binding {
     type: string;
     constant: boolean;
 }
 
 /**
- * What a builtin accepts per parameter, and what it returns.
+ * What a builtin accepts per parameterand what it returns.
  *   params: 'num' | 'whole' (integer only) | 'string' | 'sized' (string or
  *           list) | 'list' | 'sortable' (a list of scalars) | 'numlist' (a
  *           list of numbers) | 'item' (fits the first argument's item type)
@@ -575,7 +575,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
         return null;
     };
 
-    /** The list operand must be a list, and the value must fit its items. */
+    /** The list operand must be a listand the value must fit its items. */
     private checkListOp(ctx: ParserRuleContext, op: string,
                         listType: string | null, valueType: string | null): void {
         if (listType === null || listType === 'error' || listType === 'any') return;
@@ -1058,7 +1058,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
     visitStringExpr = (_ctx: StringExprContext): string => 'string';
     visitBoolExpr = (_ctx: BoolExprContext): string => 'boolean';
     // input() is dynamically typed: the runtime coerces "12" to an integer,
-    // "true" to a boolean, and anything else to a string. Reporting it as a
+    // "true" to a booleanand anything else to a string. Reporting it as a
     // fixed type would make every realistic use of it a type error.
     visitInputExpr = (_ctx: InputExprContext): string => 'any';
     // ask prints its prompt, then reads a line exactly like input().

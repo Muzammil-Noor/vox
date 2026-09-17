@@ -65,12 +65,12 @@ const DEFAULT_STEP_LIMIT = 50_000_000;
  *   call <func> [arg...] -> <dest>
  *   return [operand]
  *
- * Lists are references: `set ys xs` makes two names for one list, and a list
+ * Lists are references: `set ys xs` makes two names for one listand a list
  * passed to a function is the caller's list.
  */
 export class IRExecutor {
     /** Receives each chunk the program prints. No newline is added: text is
-     *  raw, and lines exist only where the program printed "\n". */
+     *  rawand lines exist only where the program printed "\n". */
     onOutput: (chunk: string) => void = () => {};
 
     private readonly instructions: string[];

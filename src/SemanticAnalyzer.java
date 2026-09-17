@@ -40,7 +40,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
     }
 
     /**
-     * What a builtin accepts per parameter, and what it returns.
+     * What a builtin accepts per parameterand what it returns.
      *   params: "num" | "whole" (integer only) | "string" | "sized" (string or
      *           list) | "list" | "sortable" (a list of scalars) | "numlist" (a
      *           list of numbers) | "item" (fits the first argument's item type)
@@ -639,7 +639,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
         return null;
     }
 
-    /** The list operand must be a list, and the value must fit its items. */
+    /** The list operand must be a listand the value must fit its items. */
     private void checkListOp(ParserRuleContext ctx, String op, String listType, String valueType) {
         if (listType == null || "error".equals(listType) || "any".equals(listType)) return;
         if (!isList(listType)) {
@@ -1210,7 +1210,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
     @Override public String visitStringExpr(VoxParser.StringExprContext ctx) { return "string"; }
     @Override public String visitBoolExpr(VoxParser.BoolExprContext ctx)     { return "boolean"; }
     // input() is dynamically typed: the runtime coerces "12" to an integer,
-    // "true" to a boolean, and anything else to a string. Reporting it as a
+    // "true" to a booleanand anything else to a string. Reporting it as a
     // fixed type would make every realistic use of it a type error.
     @Override public String visitInputExpr(VoxParser.InputExprContext ctx)   { return "any"; }
 

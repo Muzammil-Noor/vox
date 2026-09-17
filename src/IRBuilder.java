@@ -245,7 +245,7 @@ public class IRBuilder extends VoxBaseVisitor<String> {
     // ------------------------------------------------------------ updates --
     // `n += x` and every spoken spelling of it become one instruction whose
     // destination is also its first operand: `add n n x`. An item update
-    // fetches, updates the temporary, and stores it back.
+    // fetches, updates the temporaryand stores it back.
 
     @Override
     public String visitIncStmt(VoxParser.IncStmtContext ctx) {
@@ -1015,7 +1015,7 @@ public class IRBuilder extends VoxBaseVisitor<String> {
     @Override public String visitBoolExpr(VoxParser.BoolExprContext ctx)     { return ctx.getText(); }
     @Override public String visitStringExpr(VoxParser.StringExprContext ctx) { return normalizeString(ctx.getText()); }
 
-    /** `1st` is index 0, `2nd` is 1, and so on. The checker validated the suffix. */
+    /** `1st` is index 0, `2nd` is 1and so on. The checker validated the suffix. */
     private static int ordinalIndex(String text) {
         return Integer.parseInt(text.replaceAll("[a-z]+$", "")) - 1;
     }

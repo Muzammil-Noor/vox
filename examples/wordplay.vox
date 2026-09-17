@@ -1,4 +1,4 @@
-// A word game: strings as sequences, and dice you can replay.
+// A word game: strings as sequencesand dice you can replay.
 integer vowelsIn(string word) {
     integer found <- 0;
     for each letter in word {

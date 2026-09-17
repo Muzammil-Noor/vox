@@ -17,7 +17,8 @@ public class VoxMain {
             "Usage: vox <source.vox> [options]\n"
           + "  --emit-ir     print the generated IR\n"
           + "  --check       parse and type-check only, do not run\n"
-          + "  --steps <n>   change the execution step limit\n";
+          + "  --steps <n>   change the execution step limit\n"
+          + "  --version     print the version\n";
 
     /** Collects diagnostics instead of writing them straight to the console. */
     private static final class ErrorCollector extends BaseErrorListener {
@@ -38,6 +39,10 @@ public class VoxMain {
 
         for (int i = 0; i < args.length; i++) {
             String a = args[i];
+            if ("--version".equals(a)) {
+                System.out.println("vox " + version());
+                return;
+            }
             if ("--emit-ir".equals(a))      emitIr = true;
             else if ("--check".equals(a))   checkOnly = true;
             else if ("--steps".equals(a) && i + 1 < args.length) {
@@ -126,6 +131,18 @@ public class VoxMain {
             System.err.println(sourcePath + ": runtime error: " + e.getMessage());
             System.exit(2);
         }
+    }
+
+    /** The build scripts stamp VERSION into the jar as /vox-version.txt. */
+    private static String version() {
+        try (java.io.InputStream in = VoxMain.class.getResourceAsStream("/vox-version.txt")) {
+            if (in != null) {
+                return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+            }
+        } catch (IOException e) {
+            // fall through: an unstamped classpath build
+        }
+        return "(development build)";
     }
 
     private static void report(String path, List<String> messages) {

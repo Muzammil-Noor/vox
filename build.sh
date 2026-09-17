@@ -25,6 +25,7 @@ find "$GEN_DIR" src -name '*.java' > build/sources.txt
 javac -nowarn -d "$CLASS_DIR" -cp "$ANTLR_JAR" @build/sources.txt
 
 echo "==> packaging $JAR_OUT"
+tr -d '[:space:]' < VERSION > "$CLASS_DIR/vox-version.txt"
 # Unpack the ANTLR runtime into the jar so it is self-contained.
 UNPACK="build/runtime"
 rm -rf "$UNPACK"

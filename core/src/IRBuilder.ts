@@ -224,7 +224,7 @@ export class IRBuilder extends VoxVisitor<string | null> {
     // ------------------------------------------------------------ updates --
     // `n += x` and every spoken spelling of it become one instruction whose
     // destination is also its first operand: `add n n x`. An item update
-    // fetches, updates the temporary, and stores it back.
+    // fetches, updates the temporaryand stores it back.
 
     visitIncStmt = (ctx: IncStmtContext): null => this.update('add', ctx.target(), '1');
     visitDecStmt = (ctx: DecStmtContext): null => this.update('sub', ctx.target(), '1');
@@ -888,7 +888,7 @@ function irType(type: string): string {
     return isList(type) ? `list<${irType(elementOf(type))}>` : type;
 }
 
-/** `1st` is index 0, `2nd` is 1, and so on. The checker validated the suffix. */
+/** `1st` is index 0, `2nd` is 1and so on. The checker validated the suffix. */
 function ordinalIndex(text: string): number {
     return Number(text.replace(/[a-z]+$/, '')) - 1;
 }

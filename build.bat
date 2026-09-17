@@ -27,6 +27,7 @@ javac -nowarn -d build\classes -cp "%ANTLR%" @build\sources.txt
 if errorlevel 1 exit /b 1
 
 echo ==^> packaging build\vox.jar
+copy /y VERSION build\classes\vox-version.txt >nul
 REM Unpack the ANTLR runtime so the jar needs no classpath to run.
 mkdir build\runtime
 pushd build\runtime

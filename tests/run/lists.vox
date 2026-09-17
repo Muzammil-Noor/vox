@@ -18,7 +18,7 @@ main {
     say 1st item of f, " ", 3rd value of f;
     say 2nd item of names;
 
-    // Writing, and updating items in place.
+    // Writingand updating items in place.
     f[1] <- 21;
     set the 3rd item of f to 33;
     f[0]++;

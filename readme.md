@@ -76,16 +76,36 @@ wrapped one in Java.
 | `core/`                           | TypeScript engine (`@vox/core`): same pipeline, browser-ready    |
 | `core/src/cli.ts`                 | Node CLI mirroring the Java one, for testing parity              |
 | `build.bat` / `build.sh`          | Java build; produces `build/vox.jar`                             |
-| `vox.bat`                         | CLI launcher                                                     |
+| `vox.bat`                         | CLI launcher for a source checkout (runs the jar)                |
+| `package.bat` / `package.sh`      | Standalone build: `dist/vox/`, a zip and the Windows installer   |
+| `installer/vox.iss`               | Inno Setup script for `vox-setup-<version>.exe`                  |
+| `VERSION`                         | The release version, stamped into the jar (`vox --version`)      |
 | `tests/run.sh`                    | Regression suite (drives either engine)                          |
 | `tools/antlr-4.13.2-complete.jar` | ANTLR dependency                                                 |
 
-## Installation & Setup
+## Installing Vox
 
-### 1. Install Java
+Nothing else needs to be installed: the download carries its own trimmed Java
+runtime.
 
-Install Java 11 or higher:
-https://adoptium.net/
+**Windows installer.** Run `vox-setup-<version>.exe`. It installs for the
+current user (no admin prompt), ticks "Add Vox to the PATH" by defaultand
+appears in Add/Remove Programs. Open a new terminal afterwards:
+
+```
+vox hello.vox
+vox --version
+```
+
+**Zip.** Unpack `vox-<version>-windows-x64.zip` anywhere and put the `vox`
+folder on your `PATH`; `vox.exe` sits at its top level. Nothing is written
+outside that folder, so removing it is the uninstall.
+
+## Building from source
+
+### 1. Install a JDK
+
+Install JDK 11 or higher (JDK 14 or higher to package): https://adoptium.net/
 
 ### 2. Build
 
@@ -107,7 +127,21 @@ This generates the parser, compiles everything and packages a self-contained
 ### 3. Put Vox on your PATH (optional)
 
 Add the project folder itself to your `PATH`. `vox.bat` locates its own jar, so
-no `additional variable is needed.
+no additional variable is needed.
+
+### 4. Package a standalone Vox (optional)
+
+```bat
+package.bat
+```
+
+or `./package.sh`. This uses `jpackage` (part of the JDK) to write `dist/vox/`:
+the `vox.exe` launcher, the jarand a runtime trimmed to the one Java module
+Vox needs, about 33 MB in total. It zips that folderand if
+[Inno Setup 6](https://jrsoftware.org/isinfo.php) is installed
+(`winget install JRSoftware.InnoSetup`) it also compiles
+`dist/vox-setup-<version>.exe` from `installer/vox.iss`. Bump `VERSION` to
+release a new one; jpackage builds only for the OS it runs on.
 
 ## Usage
 
@@ -122,6 +156,7 @@ Options:
 | `--emit-ir` | Print the generated IR                               |
 | `--check`   | Parse and type-check only, do not run                |
 | `--steps N` | Change the execution step limit (default 50,000,000) |
+| `--version` | Print the version and exit                           |
 
 Exit codes: `0` success, `1` compile error, `2` runtime error, `64` bad usage.
 
@@ -168,6 +203,11 @@ VOX_CMD="node core/dist/cli.js" ./tests/run.sh     # TypeScript engine
 `tests/run/` holds programs with expected output (plus optional `.in` stdin),
 `tests/fail/` holds programs that must be rejected with a given exit code and
 message. The same suite drives both engines, which keeps them in lockstep.
+It can also drive the packaged launcher, which is how a release gets checked:
+
+```bash
+VOX_CMD="dist/vox/vox.exe" ./tests/run.sh
+```
 
 `docs/snippets/` holds the examples shown on the website's documentation page,
 and the suite runs those too:
@@ -295,7 +335,7 @@ Defaults are `0` for `integer`, `0.0` for `float`, `false` for `boolean` and
 the empty string for `string` and `character`.
 
 A name cannot be declared again while one is visible - in the same block or an
-enclosing one - so no variable is ever shadowed, and a local cannot reuse a
+enclosing one - so no variable is ever shadowedand a local cannot reuse a
 parameter's name. Sibling blocks may reuse a name, since neither can see the
 other's.
 
@@ -480,7 +520,7 @@ say length of primes, " ", primes contains 33, " ", primes is empty;
 for each p in primes { say p; }        // also: for every p in primes; for (integer p : primes)
 ```
 
-Lists are references: `ys <- xs` makes two names for one list, and a function
+Lists are references: `ys <- xs` makes two names for one listand a function
 that receives a list works on the caller's list. `copy of xs` makes a separate
 one. `is` compares lists item by item. Indexes run from `0` to `length - 1`;
 anything else - including a negative index - is a runtime error, as is popping
@@ -494,7 +534,7 @@ Each also has a function form and a dot form: `sum(xs)`, `xs.sum()`.
 
 ### Text
 
-A string is a sequence of characters, and the list vocabulary applies to it:
+A string is a sequence of charactersand the list vocabulary applies to it:
 
 ```java
 string s <- "Hello, Vox";
@@ -540,7 +580,7 @@ a game have a regression test.
 
 `a.f(b)` means exactly `f(a, b)`: the thing before the dot becomes the first
 argument. That one rule gives every list operation and builtin a method
-spelling, and your own functions too:
+spellingand your own functions too:
 
 ```java
 xs.push(5);                    // push(xs, 5)
@@ -556,11 +596,11 @@ forms remain; all three compile to the same instruction.
 
 `lock xs;` freezes a list's size: `push`, `insert` and `pop` are runtime errors
 until `unlock xs;`. Items stay writable. The lock belongs to the list, so every
-alias sees it. `fixed integer xs[5];` declares a list that is born locked, and
+alias sees it. `fixed integer xs[5];` declares a list that is born lockedand
 `xs is locked` asks.
 
 `wrap xs;` makes indexes count around the ends: `xs[-1]` is the last item,
-`xs[length]` is the first again, and ordinals follow (`5th item of` a 3-list is
+`xs[length]` is the first againand ordinals follow (`5th item of` a 3-list is
 the 2nd). It applies to reads, writes, `pop at` and ordinals, never to
 `insert at`. `unwrap xs;` restores the strict rule; `xs is wrapping` asks.
 

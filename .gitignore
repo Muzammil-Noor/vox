@@ -6,3 +6,6 @@ node_modules/
 core/src/gen/
 core/dist/
 web/dist/
+
+# Packaged app image, zip and installer (package.bat / package.sh).
+dist/
