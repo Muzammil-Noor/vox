@@ -1,0 +1,148 @@
+name: release
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check-version:
+    name: Check Version
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.version.outputs.changed }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Check if Version changed
+        id: version
+        shell: bash
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! git rev-parse HEAD^ >/dev/null 2>&1; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git diff --quiet HEAD^ HEAD -- VERSION; then
+            echo "Version did not change. Build is not needed."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version changed to $version. Build is needed."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  windows:
+    name: Windows installer
+    needs: check-version
+    if: needs.check-version.outputs.changed == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Read VERSION
+        id: version
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build the jar
+        run: bash build.sh
+
+      - name: Test the jar
+        run: bash tests/run.sh
+
+      - name: Inno Setup
+        run: |
+          if [ ! -f "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" ]; then
+            choco install innosetup --no-progress -y
+          fi
+
+      - name: Package
+        run: bash package.sh
+
+      - name: Test the packaged vox.exe
+        run: VOX_CMD="dist/vox/vox.exe" bash tests/run.sh
+
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum vox-setup-*.exe vox-*-windows-x64.zip | tee SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vox-${{ steps.version.outputs.version }}-windows
+          path: |
+            dist/vox-setup-*.exe
+            dist/vox-*-windows-x64.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          notes="$RUNNER_TEMP/notes.md"
+
+          cat > "$notes" <<EOF
+          ## Install
+
+          **Installer:** download \`vox-setup-$VERSION.exe\` and run it. It installs for the
+          current user (no admin needed) and adds \`vox\` to your PATH. Open a new terminal
+          and run \`vox --version\`.
+
+          **Zip:** unpack \`vox-$VERSION-windows-x64.zip\` anywhere and put the \`vox\` folder
+          on your PATH.
+
+          Both carry their own Java runtime, so nothing else is required. \`SHA256SUMS.txt\`
+          lists the checksums.
+
+          The installer is not code-signed, so Windows SmartScreen may warn about an
+          unknown publisher: choose "More info", then "Run anyway".
+
+          EOF
+
+          prerelease=()
+          [[ "$VERSION" == *-* ]] && prerelease=(--prerelease)
+
+          if ! gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release create "v$VERSION" \
+              --title "Vox $VERSION" \
+              --notes-file "$notes" \
+              --generate-notes \
+              ${prerelease[@]+"${prerelease[@]}"}
+          fi
+
+          gh release upload "v$VERSION" --clobber \
+            dist/vox-setup-*.exe \
+            dist/vox-*-windows-x64.zip \
+            dist/SHA256SUMS.txt

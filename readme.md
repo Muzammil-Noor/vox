@@ -79,6 +79,7 @@ wrapped one in Java.
 | `vox.bat`                         | CLI launcher for a source checkout (runs the jar)                |
 | `package.bat` / `package.sh`      | Standalone build: `dist/vox/`, a zip and the Windows installer   |
 | `installer/vox.iss`               | Inno Setup script for `vox-setup-<version>.exe`                  |
+| `.github/workflows/release.yml`   | Builds, tests and publishes a release for every `v*` tag         |
 | `VERSION`                         | The release version, stamped into the jar (`vox --version`)      |
 | `tests/run.sh`                    | Regression suite (drives either engine)                          |
 | `tools/antlr-4.13.2-complete.jar` | ANTLR dependency                                                 |
@@ -140,8 +141,23 @@ the `vox.exe` launcher, the jarand a runtime trimmed to the one Java module
 Vox needs, about 33 MB in total. It zips that folderand if
 [Inno Setup 6](https://jrsoftware.org/isinfo.php) is installed
 (`winget install JRSoftware.InnoSetup`) it also compiles
-`dist/vox-setup-<version>.exe` from `installer/vox.iss`. Bump `VERSION` to
-release a new one; jpackage builds only for the OS it runs on.
+`dist/vox-setup-<version>.exe` from `installer/vox.iss`. jpackage builds only
+for the OS it runs on.
+
+### 5. Release
+
+Releases are built by GitHub Actions on a Windows runner, so nothing needs to
+be packaged locally:
+
+1. Set `VERSION` (say `0.2.0`) and commit.
+2. `git tag v0.2.0 && git push origin v0.2.0`
+
+The workflow refuses a tag that does not match `VERSION`. It builds the jar,
+runs the suite against it, packages, runs the suite again through the packaged
+`vox.exe`, and then creates the `v0.2.0` release with the installer, the zip,
+`SHA256SUMS.txt` and notes generated from the commits since the last tag. A
+version with a suffix (`v0.2.0-beta`) is marked as a pre-release. "Run
+workflow" on the Actions tab builds the same artifacts without publishing.
 
 ## Usage
 
