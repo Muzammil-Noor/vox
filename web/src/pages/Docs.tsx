@@ -8,13 +8,6 @@ import GithubIcon from "../components/GithubIcon";
 import { CATEGORIES, REFERENCE, type DocTable } from "../docs/content";
 import { LINKS } from "../site";
 
-/**
- * The language reference. Prose lives in docs/content.ts; every code block is
- * a real program from docs/snippets/ shown next to the output the compiler
- * produced for it.
- */
-
-/** Renders `code spans` inside a sentence. */
 function RichText({ text }: { text: string }) {
   return (
     <>
@@ -115,27 +108,6 @@ export default function Docs() {
           <h1 className="text-4xl font-bold tracking-tight text-neon-red-soft glow-red sm:text-5xl">
             Documentation
           </h1>
-          {/* <p className="mt-4 max-w-2xl text-lg text-fog">
-            Every feature of the language, with a program you can run and the
-            output it produced.
-          </p>
-
-          <div className="mt-6 flex max-w-2xl items-start gap-3 rounded-lg border border-line bg-panel/60 p-4">
-            <ShieldCheck
-              size={18}
-              className="mt-0.5 shrink-0 text-neon-blue-soft"
-            />
-            <p className="text-sm leading-relaxed text-fog">
-              The examples on this page are not written by hand. Each one is a
-              real program in{" "}
-              <code className="font-mono text-paper">docs/snippets/</code>, run
-              by the regression suite on{" "}
-              <span className="text-paper">both engines</span> - the Java
-              reference implementation and the TypeScript port - and checked
-              against the output shown here. If the language changes, this page
-              fails the build.
-            </p>
-          </div> */}
 
           <div className="mt-6 flex flex-wrap gap-3">
             <Link to="/playground" className="btn-red">
@@ -154,7 +126,6 @@ export default function Docs() {
           </div>
         </header>
 
-        {/* Category jump list, for viewports without the sidebar. */}
         <nav className="flex flex-wrap gap-2 border-b border-line py-4 lg:hidden">
           {CATEGORIES.map((c) => (
             <a

@@ -51,7 +51,7 @@ jobs:
           fi
 
   windows:
-    name: Windows installer
+    name: Build Windows installer
     needs: check-version
     if: needs.check-version.outputs.changed == 'true'
     runs-on: windows-latest

@@ -1,14 +1,3 @@
-/**
- * The code blocks on the documentation page.
- *
- * Every snippet is a real program in docs/snippets/ and the .out / .err / .ir
- * files beside it are what the compiler actually produced. The regression
- * suite runs all of them on both engines (see the docs section of
- * tests/run.sh), so a snippet on this page cannot drift from the language.
- */
-
-// The options must be inline literals: Vite reads these calls statically at
-// build time, so a shared constant here would silently drop the ?raw query.
 const sources = import.meta.glob("../../../docs/snippets/*.vox", {
   query: "?raw",
   import: "default",
