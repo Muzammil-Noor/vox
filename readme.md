@@ -79,9 +79,11 @@ wrapped one in Java.
 | `vox.bat`                         | CLI launcher for a source checkout (runs the jar)                |
 | `package.bat` / `package.sh`      | Standalone build: `dist/vox/`, a zip and the Windows installer   |
 | `installer/vox.iss`               | Inno Setup script for `vox-setup-<version>.exe`                  |
-| `.github/workflows/release.yml`   | Builds, tests and publishes a release for every `v*` tag         |
+| `.github/workflows/release.yml`   | Builds and publishes a release whenever `VERSION` changes        |
 | `VERSION`                         | The release version, stamped into the jar (`vox --version`)      |
 | `tests/run.sh`                    | Regression suite (drives either engine)                          |
+| `tests/parity.sh`                 | Checks both engines compile every program identically            |
+| `.github/workflows/tests.yml`     | Runs the whole suite on every push, on Linux and Windows         |
 | `tools/antlr-4.13.2-complete.jar` | ANTLR dependency                                                 |
 
 ## Installing Vox
@@ -147,17 +149,22 @@ for the OS it runs on.
 ### 5. Release
 
 Releases are built by GitHub Actions on a Windows runner, so nothing needs to
-be packaged locally:
+be packaged locally and no tag has to be created by hand. To release:
 
-1. Set `VERSION` (say `0.2.0`) and commit.
-2. `git tag v0.2.0 && git push origin v0.2.0`
+1. Set `VERSION` (say `0.2.0`).
+2. Commit and push.
 
-The workflow refuses a tag that does not match `VERSION`. It builds the jar,
-runs the suite against it, packages, runs the suite again through the packaged
-`vox.exe`, and then creates the `v0.2.0` release with the installer, the zip,
-`SHA256SUMS.txt` and notes generated from the commits since the last tag. A
-version with a suffix (`v0.2.0-beta`) is marked as a pre-release. "Run
-workflow" on the Actions tab builds the same artifacts without publishing.
+The release workflow watches `VERSION`. When a push does not change it the
+build is skipped; when it does, the workflow builds the jar, runs the suite
+against it, packages, runs the suite again through the packaged `vox.exe`, and
+publishes release `v0.2.0` with the installer, the zip, `SHA256SUMS.txt` and
+notes generated from the commits since the last release. It creates the tag
+itself. A version with a suffix (`0.2.0-beta`) is marked as a pre-release.
+"Run workflow" on the Actions tab builds and publishes the current `VERSION`
+regardless.
+
+The check compares the last commit against its parent, so the `VERSION` bump
+must be in the final commit of the push.
 
 ## Usage
 
@@ -214,7 +221,11 @@ npm run build          # builds core, then web/dist (static, deploy anywhere)
 ```bash
 ./tests/run.sh                                     # Java engine
 VOX_CMD="node core/dist/cli.js" ./tests/run.sh     # TypeScript engine
+./tests/parity.sh                                  # the two against each other
 ```
+
+Every push runs all three on both Linux and Windows, plus the web app's type
+check and build, via `.github/workflows/tests.yml`.
 
 `tests/run/` holds programs with expected output (plus optional `.in` stdin),
 `tests/fail/` holds programs that must be rejected with a given exit code and
@@ -235,6 +246,12 @@ and the suite runs those too:
 | `NAME.err` | its exact diagnostics, with the file path stripped |
 | `NAME.ir`  | its exact emitted IR                               |
 | `NAME.in`  | optional stdin                                     |
+
+`tests/parity.sh` is the cross-check: it compiles every program in the
+repository with both engines and requires the same IR, the same diagnostics
+and the same exit code. `run.sh` proves each engine matches its expected
+output; `parity.sh` catches a feature added to one engine and forgotten in the
+other, even where no test covers it yet.
 
 The page displays those same files, so a documented example cannot drift from
 the compiler: change the language and the docs fail the build.
