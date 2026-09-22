@@ -201,17 +201,11 @@ node core/dist/cli.js examples/factorial.vox
 
 ### Web playground
 
-`web/` is a React + Vite + Tailwind site. There is no backend: the TypeScript engine runs in a Web Worker, so
-a runaway program can be stopped without freezing the page and `input()`
-prompts inline in the console. The editor runs the real compiler as you type
-and underlines syntax and semantic errors.
-
-Three routes: `/` (the pitch), `/docs` (the language reference, every example
-of which is a tested program from `docs/snippets/`) and `/playground`. The
-playground accepts `?example=<id>` or `?code=<base64url>`, which is how the
-"run it" links on the docs page work.
+`web/` is a React + Vite + Tailwind site. There is no backend: the TypeScript engine runs in a Web Worker so
+a runaway program can be stopped without freezing the page and `input()` prompts inline in the console. The editor runs the real compiler as you type and underlines syntax and semantic errors.
 
 ```bash
+cd web
 npm run dev            # builds core, then starts the dev server
 npm run build          # builds core, then web/dist (static, deploy anywhere)
 ```
@@ -224,7 +218,7 @@ VOX_CMD="node core/dist/cli.js" ./tests/run.sh     # TypeScript engine
 ./tests/parity.sh                                  # the two against each other
 ```
 
-Every push runs all three on both Linux and Windows, plus the web app's type
+Every push runs all three on both Linux and Windows, plus the web apps type
 check and build, via `.github/workflows/tests.yml`.
 
 `tests/run/` holds programs with expected output (plus optional `.in` stdin),
