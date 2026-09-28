@@ -1,9 +1,3 @@
-# Runs the whole regression suite on every push: each engine against its
-# expected output, the two engines against each other, and the web app's type
-# check and build.
-#
-# The release workflow runs these same suites before it ships anything, so a
-# green run here means a VERSION bump is safe to push.
 name: tests
 
 on:
@@ -15,20 +9,22 @@ permissions:
   contents: read
 
 concurrency:
-  # A newer push to the same branch makes an in-flight run pointless.
   group: tests-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   suite:
-    name: Suite (${{ matrix.os }})
+    name: Suite (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
-      # A Windows-only failure should not hide the Linux result, or the reverse.
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: windows
     defaults:
       run:
         # Git Bash on Windows, so one set of commands covers both runners.
@@ -57,7 +53,17 @@ jobs:
         run: npm run build -w core
 
       - name: Java engine
-        run: bash tests/run.sh
+        run: VOX_REPORT="java-${{ matrix.platform }}.tsv" bash tests/run.sh
+
+      - name: Upload Java verdicts
+        # Runs even when the suite failed: a red square on the website is a
+        # result worth publishing, and skipping here would hide it.
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: verdicts-${{ matrix.platform }}
+          path: java-${{ matrix.platform }}.tsv
+          if-no-files-found: ignore
 
       - name: TypeScript engine
         run: VOX_CMD="node core/dist/cli.js" bash tests/run.sh
@@ -90,3 +96,68 @@ jobs:
       - name: Type-check and build
         # web's prebuild builds core; build is `tsc --noEmit && vite build`.
         run: npm run build -w web
+
+  publish:
+    name: Publish Java results
+    needs: suite
+    # Publishes whatever the suite found, pass or fail, but only from main:
+    # a feature branch must not overwrite what the website shows.
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: verdicts-*
+          path: verdicts
+          merge-multiple: true
+
+      - name: Build the report
+        id: report
+        run: |
+          missing=""
+          for platform in linux windows; do
+            [ -f "verdicts/java-$platform.tsv" ] || missing="$missing $platform"
+          done
+          if [ -n "$missing" ]; then
+            echo "::warning::no verdicts for$missing; the suite did not get that far, so nothing is published"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node tests/report.mjs --out latest.json \
+            windows=verdicts/java-windows.tsv \
+            linux=verdicts/java-linux.tsv
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Push to the test-results branch
+        if: steps.report.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A fresh single-commit history each time, force-pushed: the branch
+          # is a pointer to the latest results, not an archive, so it never
+          # grows and never needs pulling into main.
+          mkdir -p publish
+          cp latest.json publish/
+          cd publish
+          git init -q -b test-results
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add latest.json
+          git commit -q -m "Java results for ${GITHUB_SHA:0:7}"
+          git push -q --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            test-results
+          echo "published to the test-results branch"

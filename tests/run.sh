@@ -1,24 +1,7 @@
-#!/usr/bin/env bash
-# Vox regression suite.
-#
-#   tests/run/NAME.vox   + NAME.out     expect exit 0 and this exact stdout
-#   tests/run/NAME.in                   optional stdin for the program
-#   tests/fail/NAME.vox  + NAME.expect  first line = expected exit code,
-#                                       remaining lines = substrings that must
-#                                       appear in the combined output
-#
-# Every program is run with stdin redirected, so a test that calls input()
-# without an .in file cannot hang the suite.
-#
-# Line endings are normalised on both sides, so CRLF from the JVM on Windows
-# does not cause spurious failures.
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
-# The engine under test. Defaults to the Java reference implementation; set
-# VOX_CMD to point the same suite at another engine, e.g.
-#   VOX_CMD="node core/dist/cli.js" tests/run.sh
 if [ -z "${VOX_CMD:-}" ]; then
     JAR="build/vox.jar"
     if [ ! -f "$JAR" ]; then
@@ -35,6 +18,19 @@ failed_names=()
 
 strip_cr() { tr -d '\r'; }
 
+# Set VOX_REPORT to a file name and every verdict is appended to it as
+#   id <TAB> ok|fail <TAB> detail
+# using the same test ids the website uses. tests/report.mjs turns those into
+# the JSON the tests page reads, which is how CI publishes Java results.
+if [ -n "${VOX_REPORT:-}" ]; then
+    : > "$VOX_REPORT"
+fi
+
+record() {
+    [ -n "${VOX_REPORT:-}" ] || return 0
+    printf '%s\t%s\t%s\n' "$1" "$2" "${3-}" >> "$VOX_REPORT"
+}
+
 # ---- programs that must run and produce exact output ------------------------
 for src in tests/run/*.vox; do
     name="$(basename "$src" .vox)"
@@ -42,6 +38,7 @@ for src in tests/run/*.vox; do
 
     if [ ! -f "$expected_file" ]; then
         echo "MISS  $name (no .out file)"
+        record "run/$name" fail "no .out file"
         fail=$((fail + 1)); failed_names+=("$name"); continue
     fi
 
@@ -54,14 +51,17 @@ for src in tests/run/*.vox; do
 
     if [ "$status" -ne 0 ]; then
         echo "FAIL  $name (exit $status, expected 0)"
+        record "run/$name" fail "exit $status, expected 0"
         fail=$((fail + 1)); failed_names+=("$name")
     elif [ "$actual" = "$expected" ]; then
         echo "ok    $name"
+        record "run/$name" ok
         pass=$((pass + 1))
     else
         echo "FAIL  $name (output mismatch)"
         diff <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") \
             | sed 's/^/        /' | head -20
+        record "run/$name" fail "output mismatch"
         fail=$((fail + 1)); failed_names+=("$name")
     fi
 done
@@ -73,6 +73,7 @@ for src in tests/fail/*.vox; do
 
     if [ ! -f "$expect_file" ]; then
         echo "MISS  $name (no .expect file)"
+        record "fail/$name" fail "no .expect file"
         fail=$((fail + 1)); failed_names+=("$name"); continue
     fi
 
@@ -97,10 +98,12 @@ for src in tests/fail/*.vox; do
 
     if [ -z "$problem" ]; then
         echo "ok    $name (rejected as expected)"
+        record "fail/$name" ok
         pass=$((pass + 1))
     else
         echo "FAIL  $name ($problem)"
         printf '%s\n' "$output" | sed 's/^/        /' | head -10
+        record "fail/$name" fail "$problem"
         fail=$((fail + 1)); failed_names+=("$name")
     fi
 done
@@ -156,9 +159,11 @@ for src in docs/snippets/*.vox; do
 
     if [ -z "$problem" ]; then
         echo "ok    docs:$name"
+        record "docs/$name" ok
         pass=$((pass + 1))
     else
         echo "FAIL  docs:$name ($problem)"
+        record "docs/$name" fail "$problem"
         fail=$((fail + 1)); failed_names+=("docs:$name")
     fi
 done
@@ -170,12 +175,16 @@ for src in examples/*.vox; do
     [ -f "$stdin_file" ] || stdin_file="/dev/null"
     if $VOX_CMD "$src" < "$stdin_file" >/dev/null 2>&1; then
         echo "ok    example:$name"
+        record "examples/$name" ok
         pass=$((pass + 1))
     else
         echo "FAIL  example:$name (non-zero exit)"
+        record "examples/$name" fail "non-zero exit"
         fail=$((fail + 1)); failed_names+=("example:$name")
     fi
 done
+
+record "#elapsed" "$SECONDS"
 
 echo
 echo "$pass passed, $fail failed"
