@@ -56,8 +56,6 @@ jobs:
         run: VOX_REPORT="java-${{ matrix.platform }}.tsv" bash tests/run.sh
 
       - name: Upload Java verdicts
-        # Runs even when the suite failed: a red square on the website is a
-        # result worth publishing, and skipping here would hide it.
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:

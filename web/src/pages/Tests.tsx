@@ -9,15 +9,15 @@ import {
   type Outcome,
   type TestStatus,
 } from "../tests/useSuiteRunner";
+import {
+  BROWSER_TAB,
+  buildTabs,
+  timeAgo,
+  useJavaReport,
+  verdicts,
+  type Verdict,
+} from "../tests/engineReport";
 import { encodeSource } from "../share";
-
-/**
- * The suite, running live in the visitor's browser.
- *
- * Only the TypeScript engine exists in a browser, so that is what these
- * squares report. The Java engine is checked by CI on Windows and Linux, and
- * the page says so rather than implying a green square covers both.
- */
 
 const TONE: Record<TestStatus, string> = {
   pending: "bg-line-2 hover:bg-line-2/60",
@@ -63,21 +63,38 @@ const Square = memo(function Square({
   );
 });
 
-function EngineBadge({ name, live }: { name: string; live?: boolean }) {
+function VerdictLine({
+  label,
+  status,
+  detail,
+}: {
+  label: string;
+  status: TestStatus;
+  detail?: string;
+}) {
+  const dot =
+    status === "pass"
+      ? "bg-emerald-500"
+      : status === "fail"
+        ? "bg-red-500"
+        : "bg-line-2";
   return (
-    <span
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${
-        live
-          ? "border-neon-blue/60 text-neon-blue-soft"
-          : "border-line-2 text-fog"
-      }`}
-    >
+    <div className="flex items-baseline gap-2 text-sm">
+      <span className={`size-2 shrink-0 translate-y-px rounded-full ${dot}`} />
+      <span className="text-fog">{label}</span>
       <span
-        className={`size-1.5 rounded-full ${live ? "bg-neon-blue" : "bg-line-2"}`}
-      />
-      {name}
-      <span className="text-fog">{live ? "running here" : "coming soon"}</span>
-    </span>
+        className={
+          status === "fail"
+            ? "text-red-400"
+            : status === "pass"
+              ? "text-paper"
+              : "text-fog"
+        }
+      >
+        {WORDS[status]}
+        {detail ? `, ${detail}` : ""}
+      </span>
+    </div>
   );
 }
 
@@ -97,7 +114,9 @@ function OutputPanel({ title, text }: { title: string; text: string }) {
 export default function Tests() {
   const { outcomes, running, elapsedMs, runAll, runOne, stop } =
     useSuiteRunner();
+  const java = useJavaReport();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [tab, setTab] = useState<string>(BROWSER_TAB);
   const startedOnce = useRef(false);
 
   // Run once on arrival, so a visitor sees the suite go without hunting for a
@@ -110,7 +129,7 @@ export default function Tests() {
 
   const onSelect = useCallback((id: string) => setSelectedId(id), []);
 
-  const summary = useMemo(() => {
+  const liveSummary = useMemo(() => {
     let passed = 0;
     let failed = 0;
     for (const test of SUITE) {
@@ -118,8 +137,35 @@ export default function Tests() {
       if (status === "pass") passed++;
       else if (status === "fail") failed++;
     }
-    return { passed, failed, done: passed + failed, total: SUITE.length };
+    return { passed, failed, done: passed + failed };
   }, [outcomes]);
+
+  const platformVerdicts = useMemo(() => {
+    const map: Record<string, Record<string, Verdict>> = {};
+    if (java.status === "ready") {
+      for (const platform of java.report.platforms) {
+        map[platform.id] = verdicts(platform);
+      }
+    }
+    return map;
+  }, [java]);
+
+  const tabs = useMemo(
+    () => buildTabs(java, liveSummary),
+    [java, liveSummary],
+  );
+
+  const statusOf = useCallback(
+    (testId: string): TestStatus => {
+      if (tab === BROWSER_TAB) return outcomes[testId]?.status ?? "pending";
+      const verdict = platformVerdicts[tab]?.[testId];
+      if (verdict === undefined || verdict.status === "unknown") {
+        return "pending";
+      }
+      return verdict.status;
+    },
+    [tab, outcomes, platformVerdicts],
+  );
 
   const selected = useMemo(
     () => SUITE.find((test) => test.id === selectedId) ?? null,
@@ -128,6 +174,12 @@ export default function Tests() {
   const selectedOutcome: Outcome | undefined = selectedId
     ? outcomes[selectedId]
     : undefined;
+
+  const activeTab = tabs.find((t) => t.id === tab) ?? tabs[0];
+  const activePlatform =
+    java.status === "ready"
+      ? (java.report.platforms.find((p) => p.id === tab) ?? null)
+      : null;
 
   return (
     <div className="neon-backdrop min-h-full">
@@ -138,32 +190,96 @@ export default function Tests() {
 
         <p className="mt-3 max-w-3xl text-fog">
           Vox has two engines, and a feature is not finished until both pass
-          every test here. The suite comes in four parts: programs that must
-          run and print exactly the right thing, programs that must be rejected
-          with exactly the right error, every snippet printed in the
-          documentation, and the examples that ship with the language. Click any
-          square to read the program and see what it produced.
+          every test here. The suite comes in four parts: programs that must run
+          and print exactly the right thing, programs that must be rejected with
+          exactly the right error, every snippet printed in the documentation,
+          and the examples that ship with the language. Click any square to read
+          the program and see what it produced.
         </p>
 
         <div className="mt-6 rounded-lg border border-line-2 bg-panel/60 p-4">
           <p className="text-sm text-paper">
-            Everything on this page runs live in your browser, on the
-            TypeScript engine.
+            The TypeScript engine runs live in your browser, right now. The Java
+            engine cannot, so its squares come from the last run on CI.
           </p>
           <p className="mt-2 max-w-3xl text-sm text-fog">
-            The second engine is written in Java, and the same suite runs
-            against it on every push, on both Windows and Linux. Those results
-            are not shown here yet. Publishing them alongside these squares is
-            next, once the infrastructure is in place.
+            {java.status === "loading" &&
+              "Fetching the latest Java results from CI."}
+            {java.status === "unavailable" &&
+              `Java results are not available: ${java.reason}. Every push to main publishes them, so this fills in on the next run.`}
+            {java.status === "ready" && (
+              <>
+                Java ran the same {SUITE.length} tests on Windows and Linux{" "}
+                {timeAgo(java.report.generatedAt)}
+                {java.report.commitShort && (
+                  <>
+                    , on commit{" "}
+                    {java.report.commitUrl ? (
+                      <a
+                        href={java.report.commitUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-mono text-neon-blue-soft hover:underline"
+                      >
+                        {java.report.commitShort}
+                      </a>
+                    ) : (
+                      <span className="font-mono">
+                        {java.report.commitShort}
+                      </span>
+                    )}
+                  </>
+                )}
+                .{" "}
+                {java.report.runUrl && (
+                  <a
+                    href={java.report.runUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-neon-blue-soft hover:underline"
+                  >
+                    See the run
+                  </a>
+                )}
+              </>
+            )}
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <EngineBadge name="TypeScript" live />
-            <EngineBadge name="Java on Windows" />
-            <EngineBadge name="Java on Linux" />
-          </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center gap-4">
+        <div className="mt-6 flex flex-wrap gap-2">
+          {tabs.map((t) => {
+            const active = t.id === tab;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                disabled={!t.ready}
+                className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm transition-colors ${
+                  active
+                    ? "border-neon-blue text-paper"
+                    : "border-line-2 text-fog hover:text-paper"
+                } ${t.ready ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`}
+              >
+                {t.label}
+                {t.live && <span className="text-xs text-fog">live</span>}
+                {t.ready ? (
+                  <span
+                    className={`text-xs ${
+                      t.failed > 0 ? "text-red-400" : "text-emerald-400"
+                    }`}
+                  >
+                    {t.failed > 0 ? `${t.failed} failing` : `${t.passed} ok`}
+                  </span>
+                ) : (
+                  <span className="text-xs text-fog">soon</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-4">
           {running ? (
             <button type="button" className="btn-ghost" onClick={stop}>
               <CircleStop size={15} />
@@ -177,34 +293,57 @@ export default function Tests() {
           )}
 
           <p className="text-sm text-fog">
-            {running ? (
+            {tab === BROWSER_TAB ? (
+              running ? (
+                <>
+                  running{" "}
+                  <span className="text-paper">
+                    {liveSummary.done + 1} of {SUITE.length}
+                  </span>{" "}
+                  in this browser
+                </>
+              ) : (
+                <>
+                  <span className="text-paper">{SUITE.length}</span> tests
+                  {liveSummary.done > 0 && (
+                    <>
+                      {", "}
+                      <span className="text-emerald-400">
+                        {liveSummary.passed} passed
+                      </span>
+                      {", "}
+                      <span
+                        className={
+                          liveSummary.failed > 0 ? "text-red-400" : "text-fog"
+                        }
+                      >
+                        {liveSummary.failed} failed
+                      </span>
+                      {elapsedMs !== null && <> in {formatMs(elapsedMs)}</>}
+                    </>
+                  )}
+                </>
+              )
+            ) : activePlatform ? (
               <>
-                running{" "}
-                <span className="text-paper">
-                  {summary.done + 1} of {summary.total}
+                <span className="text-paper">{activePlatform.runner}</span>,{" "}
+                <span className="text-emerald-400">
+                  {activePlatform.passed} passed
                 </span>
-              </>
-            ) : (
-              <>
-                <span className="text-paper">{summary.total}</span> tests
-                {summary.done > 0 && (
-                  <>
-                    {", "}
-                    <span className="text-emerald-400">
-                      {summary.passed} passed
-                    </span>
-                    {", "}
-                    <span
-                      className={
-                        summary.failed > 0 ? "text-red-400" : "text-fog"
-                      }
-                    >
-                      {summary.failed} failed
-                    </span>
-                    {elapsedMs !== null && <> in {formatMs(elapsedMs)}</>}
-                  </>
+                {", "}
+                <span
+                  className={
+                    activePlatform.failed > 0 ? "text-red-400" : "text-fog"
+                  }
+                >
+                  {activePlatform.failed} failed
+                </span>
+                {activePlatform.elapsedSeconds !== null && (
+                  <> in {activePlatform.elapsedSeconds} s</>
                 )}
               </>
+            ) : (
+              <>not published yet</>
             )}
           </p>
         </div>
@@ -214,7 +353,7 @@ export default function Tests() {
             {GROUPS.map((group) => {
               const tests = testsInGroup(group.id);
               const failed = tests.filter(
-                (test) => outcomes[test.id]?.status === "fail",
+                (test) => statusOf(test.id) === "fail",
               ).length;
               return (
                 <section key={group.id}>
@@ -237,7 +376,7 @@ export default function Tests() {
                       <Square
                         key={test.id}
                         test={test}
-                        status={outcomes[test.id]?.status ?? "pending"}
+                        status={statusOf(test.id)}
                         selected={test.id === selectedId}
                         onSelect={onSelect}
                       />
@@ -256,22 +395,16 @@ export default function Tests() {
                     Pick a square to see the program it runs, what it was
                     expected to produce, and what it actually produced.
                   </p>
+                  <p className="mt-2 text-xs text-fog">
+                    Showing {activeTab.label} results.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate font-mono text-sm text-paper">
-                        {selected.path}
-                      </p>
-                      <p className="text-xs text-fog">
-                        {selectedOutcome
-                          ? WORDS[selectedOutcome.status]
-                          : WORDS.pending}
-                        {selectedOutcome?.result &&
-                          ` in ${formatMs(selectedOutcome.result.elapsedMs)}`}
-                      </p>
-                    </div>
+                    <p className="min-w-0 truncate font-mono text-sm text-paper">
+                      {selected.path}
+                    </p>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
@@ -292,12 +425,49 @@ export default function Tests() {
                     </div>
                   </div>
 
+                  <div className="space-y-1.5 rounded-lg border border-line-2 bg-panel/60 p-3">
+                    <VerdictLine
+                      label="TypeScript, in this browser:"
+                      status={selectedOutcome?.status ?? "pending"}
+                      detail={
+                        selectedOutcome?.result
+                          ? formatMs(selectedOutcome.result.elapsedMs)
+                          : undefined
+                      }
+                    />
+                    {java.status === "ready" ? (
+                      java.report.platforms.map((platform) => {
+                        const verdict = platformVerdicts[platform.id]?.[
+                          selected.id
+                        ] ?? { status: "unknown" as const };
+                        return (
+                          <VerdictLine
+                            key={platform.id}
+                            label={`${platform.label}:`}
+                            status={
+                              verdict.status === "unknown"
+                                ? "pending"
+                                : verdict.status
+                            }
+                            detail={
+                              verdict.status === "fail"
+                                ? verdict.detail
+                                : undefined
+                            }
+                          />
+                        );
+                      })
+                    ) : (
+                      <p className="text-xs text-fog">
+                        Java results from CI are not loaded.
+                      </p>
+                    )}
+                  </div>
+
                   <Code
                     source={selected.source}
                     title="Program"
-                    accent={
-                      selectedOutcome?.status === "fail" ? "red" : "blue"
-                    }
+                    accent={selectedOutcome?.status === "fail" ? "red" : "blue"}
                   />
 
                   {selectedOutcome?.crash !== undefined && (
@@ -305,6 +475,14 @@ export default function Tests() {
                       The engine itself threw: {selectedOutcome.crash}
                     </p>
                   )}
+
+                  {selectedOutcome !== undefined &&
+                    selectedOutcome.checks.length > 0 && (
+                      <p className="text-xs text-fog">
+                        Compared in this browser. CI reports a verdict per test,
+                        not the output behind it.
+                      </p>
+                    )}
 
                   {selectedOutcome?.checks.map((check) => (
                     <div key={check.name} className="space-y-2">
@@ -330,7 +508,7 @@ export default function Tests() {
 
                   {selectedOutcome === undefined && (
                     <p className="text-sm text-fog">
-                      This test has not run yet.
+                      This test has not run in your browser yet.
                     </p>
                   )}
                 </div>

@@ -18,10 +18,6 @@ failed_names=()
 
 strip_cr() { tr -d '\r'; }
 
-# Set VOX_REPORT to a file name and every verdict is appended to it as
-#   id <TAB> ok|fail <TAB> detail
-# using the same test ids the website uses. tests/report.mjs turns those into
-# the JSON the tests page reads, which is how CI publishes Java results.
 if [ -n "${VOX_REPORT:-}" ]; then
     : > "$VOX_REPORT"
 fi
