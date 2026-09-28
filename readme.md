@@ -83,7 +83,8 @@ wrapped one in Java.
 | `VERSION`                         | The release version, stamped into the jar (`vox --version`)      |
 | `tests/run.sh`                    | Regression suite (drives either engine)                          |
 | `tests/parity.sh`                 | Checks both engines compile every program identically            |
-| `.github/workflows/tests.yml`     | Runs the whole suite on every push, on Linux and Windows         |
+| `tests/report.mjs`                | Turns suite verdicts into the JSON the website's tests page reads |
+| `.github/workflows/tests.yml`     | Runs the whole suite on every push; publishes the Java results   |
 | `tools/antlr-4.13.2-complete.jar` | ANTLR dependency                                                 |
 
 ## Installing Vox
@@ -246,6 +247,30 @@ repository with both engines and requires the same IR, the same diagnostics
 and the same exit code. `run.sh` proves each engine matches its expected
 output; `parity.sh` catches a feature added to one engine and forgotten in the
 other, even where no test covers it yet.
+
+### Publishing results to the website
+
+The tests page runs the TypeScript engine live in the visitor's browser. A
+browser cannot run the Java engine so those results are published by CI
+instead.
+
+Set `VOX_REPORT` and the suite also writes a verdict per test, using the same
+test ids the page uses:
+
+```bash
+VOX_REPORT=java.tsv ./tests/run.sh
+node tests/report.mjs --out latest.json windows=java.tsv linux=other.tsv
+```
+
+On every push to `main`, `tests.yml` collects one of those files from the
+Windows runner and one from Linux, merges them, and force-pushes the result to
+the **`test-results` branch** as `latest.json`. The page fetches it from there.
+
+That branch is a pointer, not an archive: each run replaces it with a single
+fresh commit. Nothing is ever committed to `main`, so there is no bot commit to
+pull and no extra deploy. Results are published even when the suite fails,
+because a red square is worth showing. A run from any branch other than `main`
+publishes nothing.
 
 The page displays those same files, so a documented example cannot drift from
 the compiler: change the language and the docs fail the build.
