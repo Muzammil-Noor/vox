@@ -126,6 +126,11 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
 
     private final Map<String, Signature> functions = new LinkedHashMap<>();
     private final Deque<Map<String, Binding>> scopes = new ArrayDeque<>();
+
+    // What --emit-symbols prints: every name the checker took in, nested the
+    // way its scopes were. Collected always; it costs a few strings per run.
+    private final List<String> symbolLines = new ArrayList<>();
+    private final List<String> functionLines = new ArrayList<>();
     private final List<String> errors = new ArrayList<>();
     private final List<String> warnings = new ArrayList<>();
     /** The function being checked; null inside main. */
@@ -135,6 +140,22 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
 
     public List<String> getErrors()   { return errors; }
     public List<String> getWarnings() { return warnings; }
+
+    /**
+     * What the checker learned: the functions it knows about, then every
+     * variable it took in, nested the way the scopes were. This is the only
+     * view of the stage whose output is otherwise just silence.
+     */
+    public List<String> getSymbols() {
+        List<String> out = new ArrayList<>();
+        if (!functionLines.isEmpty()) {
+            out.add("functions");
+            out.addAll(functionLines);
+            if (!symbolLines.isEmpty()) out.add("");
+        }
+        out.addAll(symbolLines);
+        return out;
+    }
 
     private void error(ParserRuleContext ctx, String msg) {
         errors.add(at(ctx.getStart()) + " error: " + msg);
@@ -150,7 +171,13 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
 
     // ------------------------------------------------------------- scopes --
 
-    private void enterScope() { scopes.push(new LinkedHashMap<>()); }
+    private void enterScope(String what) {
+        // A blank line between top-level scopes keeps functions from running
+        // into one another in the listing.
+        if (scopes.isEmpty() && !symbolLines.isEmpty()) symbolLines.add("");
+        symbolLines.add("  ".repeat(scopes.size()) + "scope (" + what + ")");
+        scopes.push(new LinkedHashMap<>());
+    }
     private void exitScope()  { if (!scopes.isEmpty()) scopes.pop(); }
 
     private boolean declaredHere(String name) {
@@ -180,6 +207,8 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
 
     private void define(String name, String type, boolean constant) {
         if (!scopes.isEmpty()) scopes.peek().put(name, new Binding(type, constant));
+        symbolLines.add("  ".repeat(scopes.size()) + name + " : " + type
+                + (constant ? " (constant)" : ""));
     }
 
     private void declareVariable(ParserRuleContext ctx, String name, String type, String valueType) {
@@ -238,6 +267,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
             return;
         }
         functions.put(name, new Signature(returnType, params));
+        functionLines.add("  " + name + "(" + String.join(", ", params) + ") -> " + returnType);
     }
 
     private static List<String> paramTypes(VoxParser.ParameterListContext ctx) {
@@ -264,7 +294,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
     public String visitDefinition(VoxParser.DefinitionContext ctx) {
         currentName = ctx.ID().getText();
         currentReturnType = returnTypeOf(ctx.returnType());
-        enterScope();
+        enterScope("function " + ctx.ID().getText());
         if (ctx.parameterList() != null) {
             for (VoxParser.ParameterContext p : ctx.parameterList().parameter()) {
                 String name = p.ID().getText();
@@ -285,7 +315,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
 
     @Override
     public String visitMainFunction(VoxParser.MainFunctionContext ctx) {
-        enterScope();
+        enterScope("main");
         visit(ctx.block());
         exitScope();
         return null;
@@ -293,7 +323,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
 
     @Override
     public String visitBlock(VoxParser.BlockContext ctx) {
-        enterScope();
+        enterScope("block");
         for (VoxParser.StatementContext s : ctx.statement()) visit(s);
         exitScope();
         return null;
@@ -851,7 +881,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
     @Override
     public String visitForLoop(VoxParser.ForLoopContext ctx) {
         // The loop variable belongs to a scope enclosing the body.
-        enterScope();
+        enterScope("for");
         visit(ctx.variableDeclaration());
         requireCondition(ctx.expression());
         visit(ctx.forUpdate());
@@ -886,7 +916,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
         }
 
         // The loop variable belongs to a scope enclosing the body.
-        enterScope();
+        enterScope("for");
         declareVariable(rc, name, varType, null);
         if (isNumeric(varType)) {
             checkAssignable(rc, varType, startType, name);
@@ -921,7 +951,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
             error(declared, "loop variable '" + name + "' is " + varType + " but the list holds " + element);
         }
 
-        enterScope();
+        enterScope("for each");
         declareVariable(ctx, name, varType, null);
         loopDepth++;
         visit(ctx.block());

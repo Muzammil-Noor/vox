@@ -7,7 +7,11 @@ import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.tree.ParseTree;
 
 /**
- * Command line entry point: parse, check, lower to IR, run.
+ * Command line entry point: parse, check, lower, run.
+ *
+ * The body of main() is the whole pipeline in order, and each stage can be
+ * printed on the way past with an --emit flag. Reading this file top to bottom
+ * is the shortest description of how Vox works.
  *
  * Exit codes: 0 success, 1 compile error, 2 runtime error, 64 bad usage.
  */
@@ -15,10 +19,14 @@ public class VoxMain {
 
     private static final String USAGE =
             "Usage: vox <source.vox> [options]\n"
-          + "  --emit-ir     print the generated IR\n"
-          + "  --check       parse and type-check only, do not run\n"
-          + "  --steps <n>   change the execution step limit\n"
-          + "  --version     print the version\n";
+          + "  --emit-tokens  print the tokens the lexer produced\n"
+          + "  --emit-tree    print the parse tree\n"
+          + "  --emit-symbols print the names the checker took in\n"
+          + "  --emit-ir      print the generated IR\n"
+          + "  --trace        print each instruction as it runs, on stderr\n"
+          + "  --check        parse and type-check only, do not run\n"
+          + "  --steps <n>    change the execution step limit\n"
+          + "  --version      print the version\n";
 
     /** Collects diagnostics instead of writing them straight to the console. */
     private static final class ErrorCollector extends BaseErrorListener {
@@ -31,9 +39,33 @@ public class VoxMain {
         }
     }
 
+    /**
+     * Prints the --emit sections. A single section is printed bare, so
+     * `--emit-ir` keeps feeding scripts the way it always has; ask for more
+     * than one and each gets a heading so they can be told apart.
+     */
+    private static final class Sections {
+        private final boolean headed;
+        private boolean any = false;
+        Sections(int requested) { this.headed = requested > 1; }
+
+        void print(String title, List<String> lines) {
+            if (headed) {
+                if (any) System.out.println();
+                System.out.println("== " + title);
+            }
+            any = true;
+            for (String line : lines) System.out.println(line);
+        }
+    }
+
     public static void main(String[] args) {
         String sourcePath = null;
+        boolean emitTokens = false;
+        boolean emitTree = false;
+        boolean emitSymbols = false;
         boolean emitIr = false;
+        boolean trace = false;
         boolean checkOnly = false;
         long stepLimit = -1;
 
@@ -43,8 +75,12 @@ public class VoxMain {
                 System.out.println("vox " + version());
                 return;
             }
-            if ("--emit-ir".equals(a))      emitIr = true;
-            else if ("--check".equals(a))   checkOnly = true;
+            if ("--emit-tokens".equals(a))       emitTokens = true;
+            else if ("--emit-tree".equals(a))    emitTree = true;
+            else if ("--emit-symbols".equals(a)) emitSymbols = true;
+            else if ("--emit-ir".equals(a))      emitIr = true;
+            else if ("--trace".equals(a))        trace = true;
+            else if ("--check".equals(a))        checkOnly = true;
             else if ("--steps".equals(a) && i + 1 < args.length) {
                 try {
                     stepLimit = Long.parseLong(args[++i]);
@@ -78,14 +114,25 @@ public class VoxMain {
             return;
         }
 
-        // ---- parse ----------------------------------------------------------
+        Sections sections = new Sections(
+                (emitTokens ? 1 : 0) + (emitTree ? 1 : 0)
+              + (emitSymbols ? 1 : 0) + (emitIr ? 1 : 0));
+
+        // ---- scan ------------------------------------------------------------
         ErrorCollector collector = new ErrorCollector();
 
         VoxLexer lexer = new VoxLexer(CharStreams.fromString(source, sourcePath));
         lexer.removeErrorListeners();
         lexer.addErrorListener(collector);
 
-        VoxParser parser = new VoxParser(new CommonTokenStream(lexer));
+        CommonTokenStream tokenStream = new CommonTokenStream(lexer);
+        // Read every token up front so they can be shown even when the parse
+        // that follows fails: a lexer that succeeded is worth seeing.
+        tokenStream.fill();
+        if (emitTokens) sections.print("tokens", Inspect.tokens(tokenStream.getTokens()));
+
+        // ---- parse -----------------------------------------------------------
+        VoxParser parser = new VoxParser(tokenStream);
         parser.removeErrorListeners();
         parser.addErrorListener(collector);
 
@@ -98,9 +145,13 @@ public class VoxMain {
             System.exit(1);
         }
 
-        // ---- check ----------------------------------------------------------
+        if (emitTree) sections.print("parse tree", Inspect.tree(tree, parser));
+
+        // ---- check -----------------------------------------------------------
         SemanticAnalyzer analyzer = new SemanticAnalyzer();
         analyzer.visit(tree);
+
+        if (emitSymbols) sections.print("symbols", analyzer.getSymbols());
 
         for (String w : analyzer.getWarnings()) {
             System.err.println(sourcePath + ":" + w);
@@ -110,21 +161,25 @@ public class VoxMain {
             System.exit(1);
         }
 
-        // ---- lower ----------------------------------------------------------
+        // ---- lower -----------------------------------------------------------
         IRBuilder builder = new IRBuilder();
         builder.visit(tree);
         List<String> ir = builder.getInstructions();
 
         if (emitIr) {
+            List<String> numbered = new ArrayList<>();
             for (int i = 0; i < ir.size(); i++) {
-                System.out.println(String.format("%4d  %s", i, ir.get(i)));
+                numbered.add(String.format("%4d  %s", i, ir.get(i)));
             }
+            sections.print("ir", numbered);
         }
         if (checkOnly) return;
 
-        // ---- run ------------------------------------------------------------
+        // ---- run -------------------------------------------------------------
         IRExecutor executor = new IRExecutor(ir);
         if (stepLimit > 0) executor.withStepLimit(stepLimit);
+        // The trace goes to stderr so it never mixes into the program's output.
+        if (trace) executor.withTrace(text -> System.err.print(text));
         try {
             executor.execute();
         } catch (IRExecutor.VoxRuntimeError e) {

@@ -60,6 +60,7 @@ public class IRExecutor {
 
     // print adds no newline, so flush per write to keep prompts visible.
     private Sink output = text -> { System.out.print(text); System.out.flush(); };
+    private Sink trace = null;
     private Source input = new Source() {
         private BufferedReader reader;
         @Override public String readLine() {
@@ -110,6 +111,13 @@ public class IRExecutor {
         preprocess();
     }
 
+    /**
+     * Prints each instruction as it is about to run. The IR listing shows the
+     * program; this shows the path actually taken through it, which is where
+     * loops, branches and calls stop being theoretical.
+     */
+    public IRExecutor withTrace(Sink sink)      { this.trace = sink; return this; }
+
     public IRExecutor withOutput(Sink sink)     { this.output = sink; return this; }
     public IRExecutor withInput(Source source)  { this.input = source; return this; }
     public IRExecutor withStepLimit(long limit) { this.stepLimit = limit; return this; }
@@ -143,6 +151,7 @@ public class IRExecutor {
 
             String raw = instructions.get(pc).trim();
             if (raw.isEmpty()) { pc++; continue; }
+            if (trace != null) trace.write(String.format("%4d  %s", pc, raw) + "\n");
             String[] toks = tokenize(raw);
 
             switch (toks[0]) {
