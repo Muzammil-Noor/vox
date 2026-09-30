@@ -142,6 +142,26 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
     /** Every message with its source range, in the order it was found. */
     readonly diagnostics: Diagnostic[] = [];
 
+    // What --emit-symbols prints: every name the checker took in, nested the
+    // way its scopes were. Collected always; it costs a few strings per run.
+    private readonly symbolLines: string[] = [];
+    private readonly functionLines: string[] = [];
+
+    /**
+     * What the checker learned: the functions it knows about, then every
+     * variable it took in, nested the way the scopes were. This is the only
+     * view of the stage whose output is otherwise just silence.
+     */
+    get symbols(): string[] {
+        const out: string[] = [];
+        if (this.functionLines.length > 0) {
+            out.push('functions', ...this.functionLines);
+            if (this.symbolLines.length > 0) out.push('');
+        }
+        out.push(...this.symbolLines);
+        return out;
+    }
+
     /** The CLI-style "line L:C error: ..." strings, errors only. */
     get errors(): string[] {
         return this.diagnostics.filter(d => d.severity === 'error').map(formatDiagnostic);
@@ -162,7 +182,13 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
 
     // ------------------------------------------------------------- scopes --
 
-    private enterScope(): void { this.scopes.push(new Map()); }
+    private enterScope(what: string): void {
+        // A blank line between top-level scopes keeps functions from running
+        // into one another in the listing.
+        if (this.scopes.length === 0 && this.symbolLines.length > 0) this.symbolLines.push('');
+        this.symbolLines.push('  '.repeat(this.scopes.length) + `scope (${what})`);
+        this.scopes.push(new Map());
+    }
     private exitScope(): void { this.scopes.pop(); }
 
     private declaredHere(name: string): boolean {
@@ -187,6 +213,8 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
 
     private define(name: string, type: string, constant = false): void {
         if (this.scopes.length > 0) this.scopes[this.scopes.length - 1].set(name, { type, constant });
+        this.symbolLines.push('  '.repeat(this.scopes.length) + `${name} : ${type}`
+            + (constant ? ' (constant)' : ''));
     }
 
     /**
@@ -241,6 +269,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
             return;
         }
         this.functions.set(name, { returnType, paramTypes: params });
+        this.functionLines.push(`  ${name}(${params.join(', ')}) -> ${returnType}`);
     }
 
     visitPrototype = (_ctx: PrototypeContext): null => {
@@ -250,7 +279,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
     visitDefinition = (ctx: DefinitionContext): null => {
         const name = ctx.ID().getText();
         this.currentFunction = { name, returnType: returnTypeOf(ctx.returnType()) };
-        this.enterScope();
+        this.enterScope(`function ${ctx.ID().getText()}`);
         const params = ctx.parameterList();
         if (params) {
             for (const p of params.parameter_list()) {
@@ -270,14 +299,14 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
     };
 
     visitMainFunction = (ctx: MainFunctionContext): null => {
-        this.enterScope();
+        this.enterScope('main');
         this.visit(ctx.block());
         this.exitScope();
         return null;
     };
 
     visitBlock = (ctx: BlockContext): null => {
-        this.enterScope();
+        this.enterScope('block');
         for (const s of ctx.statement_list()) this.visit(s);
         this.exitScope();
         return null;
@@ -753,7 +782,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
 
     visitForLoop = (ctx: ForLoopContext): null => {
         // The loop variable belongs to a scope enclosing the body.
-        this.enterScope();
+        this.enterScope('for');
         this.visit(ctx.variableDeclaration());
         this.requireCondition(ctx.expression());
         this.visit(ctx.forUpdate());
@@ -787,7 +816,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
         }
 
         // The loop variable belongs to a scope enclosing the body.
-        this.enterScope();
+        this.enterScope('for');
         this.declareVariable(rc, name, varType, null);
         if (isNumeric(varType)) {
             this.checkAssignable(rc, varType, startType, name);
@@ -821,7 +850,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
             this.error(declared, `loop variable '${name}' is ${varType} but the list holds ${element}`);
         }
 
-        this.enterScope();
+        this.enterScope('for each');
         this.declareVariable(ctx, name, varType, null);
         this.loopDepth++;
         this.visit(ctx.block());

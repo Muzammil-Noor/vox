@@ -85,6 +85,13 @@ export class IRExecutor {
     private started = false;
     private finished = false;
 
+    /**
+     * Called with each instruction as it is about to run. The IR listing shows
+     * the program; this shows the path actually taken through it, which is
+     * where loops, branches and calls stop being theoretical.
+     */
+    trace: ((text: string) => void) | null = null;
+
     constructor(instructions: string[], options?: { stepLimit?: number }) {
         this.instructions = [...instructions];
         this.stepLimit = options?.stepLimit ?? DEFAULT_STEP_LIMIT;
@@ -140,6 +147,10 @@ export class IRExecutor {
                 throw new VoxRuntimeError(
                     `execution step limit exceeded (${this.stepLimit}); the program is probably looping forever`);
             }
+
+            // Traced here, past the pause checks, so a sliced run reports each
+            // instruction exactly once, matching the Java engine.
+            if (this.trace) this.trace(`${String(this.pc).padStart(4)}  ${raw}\n`);
 
             switch (op) {
                 case 'func_start':

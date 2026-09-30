@@ -11,6 +11,7 @@ import VoxParser from "./gen/VoxParser.js";
 import { SemanticAnalyzer } from "./SemanticAnalyzer.js";
 import { IRBuilder } from "./IRBuilder.js";
 import { Diagnostic, formatDiagnostic } from "./diagnostics.js";
+import { formatTokens, formatTree } from "./inspect.js";
 
 export interface CompileResult {
   /** Empty when compilation succeeded. Messages look like "line 3:4 error: ...". */
@@ -21,6 +22,21 @@ export interface CompileResult {
   diagnostics: Diagnostic[];
   /** The IR program or null when there were errors. */
   ir: string[] | null;
+  /** False when the source did not parse, so no later stage ran at all. */
+  parsed: boolean;
+  /** Set only when `stages` was asked for: the pipeline's intermediate forms. */
+  tokens: string[] | null;
+  tree: string[] | null;
+  symbols: string[] | null;
+}
+
+export interface CompileOptions {
+  /**
+   * Also capture the tokens, parse tree and symbol table, for showing the
+   * pipeline rather than just its result. Off by default: the playground
+   * compiles on every keystroke and does not always need them.
+   */
+  stages?: boolean;
 }
 
 /** Collects syntax errors, with the offending token's range, instead of printing them. */
@@ -54,14 +70,21 @@ class Collector extends ErrorListener<unknown> {
  * The front half of the pipeline: parse, check, lower. Pure - no I/O - so it
  * runs identically in Node, a browser or a worker.
  */
-export function compile(source: string): CompileResult {
+export function compile(source: string, options: CompileOptions = {}): CompileResult {
+  const stages = options.stages === true;
   const collector = new Collector();
 
   const lexer = new VoxLexer(new CharStream(source));
   lexer.removeErrorListeners();
   lexer.addErrorListener(collector);
 
-  const parser = new VoxParser(new CommonTokenStream(lexer));
+  const stream = new CommonTokenStream(lexer);
+  // Read every token up front so they can be shown even when the parse that
+  // follows fails: a lexer that succeeded is worth seeing.
+  stream.fill();
+  const tokens = stages ? formatTokens(stream.tokens) : null;
+
+  const parser = new VoxParser(stream);
   parser.removeErrorListeners();
   parser.addErrorListener(collector);
 
@@ -74,17 +97,29 @@ export function compile(source: string): CompileResult {
       warnings: [],
       diagnostics: collector.diagnostics,
       ir: null,
+      parsed: false,
+      tokens,
+      tree: null,
+      symbols: null,
     };
   }
 
+  const treeLines = stages ? formatTree(tree, parser) : null;
+
   const analyzer = new SemanticAnalyzer();
   analyzer.visit(tree);
+  const symbols = stages ? analyzer.symbols : null;
+
   if (analyzer.errors.length > 0) {
     return {
       errors: analyzer.errors,
       warnings: analyzer.warnings,
       diagnostics: [...analyzer.diagnostics],
       ir: null,
+      parsed: true,
+      tokens,
+      tree: treeLines,
+      symbols,
     };
   }
 
@@ -95,5 +130,9 @@ export function compile(source: string): CompileResult {
     warnings: analyzer.warnings,
     diagnostics: [...analyzer.diagnostics],
     ir: builder.instructions,
+    parsed: true,
+    tokens,
+    tree: treeLines,
+    symbols,
   };
 }
