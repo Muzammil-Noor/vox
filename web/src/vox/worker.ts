@@ -63,12 +63,19 @@ port.onmessage = (event: MessageEvent<ToWorker>) => {
   const msg = event.data;
 
   if (msg.type === 'run') {
-    const result = compile(msg.source);
+    const result = compile(msg.source, { stages: true });
     if (result.errors.length > 0 || result.ir === null) {
       port.postMessage({ type: 'compile-error', errors: result.errors, warnings: result.warnings });
       return;
     }
-    port.postMessage({ type: 'compiled', ir: result.ir, warnings: result.warnings });
+    port.postMessage({
+      type: 'compiled',
+      ir: result.ir,
+      warnings: result.warnings,
+      tokens: result.tokens ?? [],
+      tree: result.tree ?? [],
+      symbols: result.symbols ?? [],
+    });
 
     executor = new IRExecutor(result.ir);
     executor.onOutput = chunk => { pending.push(chunk); };

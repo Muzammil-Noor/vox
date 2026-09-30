@@ -111,6 +111,8 @@ done
 #   docs/snippets/NAME.vox  + NAME.out   exact stdout
 #                           + NAME.err   exact diagnostics (path prefix stripped)
 #                           + NAME.ir    exact emitted IR
+#                           + NAME.tokens, NAME.tree, NAME.symbols
+#                                        exact output of the matching --emit flag
 #                           + NAME.in    optional stdin
 for src in docs/snippets/*.vox; do
     name="$(basename "$src" .vox)"
@@ -151,7 +153,22 @@ for src in docs/snippets/*.vox; do
         [ "$actual" = "$expected" ] || problem="IR mismatch"
     fi
 
-    [ "$checked" -eq 0 ] && problem="no .out/.err/.ir file"
+    # The pipeline stages, so a page that shows them cannot drift either.
+    for stage in tokens tree symbols; do
+        [ -n "$problem" ] && break
+        [ -f "docs/snippets/$name.$stage" ] || continue
+        checked=1
+        actual="$($VOX_CMD "$src" --emit-$stage --check 2>/dev/null | strip_cr)"
+        expected="$(strip_cr < "docs/snippets/$name.$stage")"
+        if [ "$actual" != "$expected" ]; then
+            problem="$stage mismatch"
+            diff <(printf '%s
+' "$expected") <(printf '%s
+' "$actual")                 | sed 's/^/        /' | head -10
+        fi
+    done
+
+    [ "$checked" -eq 0 ] && problem="no expected-output file"
 
     if [ -z "$problem" ]; then
         echo "ok    docs:$name"

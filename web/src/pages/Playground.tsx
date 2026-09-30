@@ -4,7 +4,7 @@ import { Play, Square, Braces } from "lucide-react";
 import Nav from "../components/Nav";
 import Editor from "../components/Editor";
 import Console from "../components/Console";
-import IRPanel from "../components/IRPanel";
+import PipelinePanel from "../components/PipelinePanel";
 import SplitPane, { useMediaQuery } from "../components/SplitPane";
 import { DEFAULT_EXAMPLE, EXAMPLES, findExample } from "../examples";
 import { decodeSource } from "../share";
@@ -125,7 +125,7 @@ export default function Playground() {
             type="button"
             onClick={() => setShowIr((v) => !v)}
             aria-pressed={showIr}
-            title="Toggle the intermediate representation panel"
+            title="Toggle the pipeline panel: tokens, parse tree, symbols and IR"
             className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150 select-none ${
               showIr
                 ? "tube-blue text-neon-blue-soft"
@@ -133,7 +133,7 @@ export default function Playground() {
             }`}
           >
             <Braces size={14} />
-            IR
+            Pipeline
           </button>
           {busy ? (
             <button type="button" onClick={runner.stop} className="btn-ghost">
@@ -178,7 +178,11 @@ export default function Playground() {
       }
       second={
         showIr ? (
-          <IRPanel ir={runner.ir} onHide={() => setShowIr(false)} />
+          <PipelinePanel
+            ir={runner.ir}
+            stages={runner.stages}
+            onHide={() => setShowIr(false)}
+          />
         ) : null
       }
     />

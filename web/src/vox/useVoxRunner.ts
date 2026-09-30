@@ -10,6 +10,13 @@ import {
 
 export type { ConsoleLine, LineKind };
 
+/** The pipeline's intermediate forms, as the engine printed them. */
+export interface Stages {
+  tokens: string[];
+  tree: string[];
+  symbols: string[];
+}
+
 export type RunnerStatus = "idle" | "running" | "waiting" | "done" | "error";
 
 /**
@@ -26,6 +33,7 @@ export function useVoxRunner() {
   const [status, setStatus] = useState<RunnerStatus>("idle");
   const [lines, setLines] = useState<ConsoleLine[]>([]);
   const [ir, setIr] = useState<string[] | null>(null);
+  const [stages, setStages] = useState<Stages | null>(null);
 
   const workerRef = useRef<Worker | null>(null);
   const nextId = useRef(0);
@@ -75,6 +83,7 @@ export function useVoxRunner() {
       partial.current = { text: "", shown: false };
       setLines([]);
       setIr(null);
+      setStages(null);
       setStatus("running");
 
       const worker = new Worker(new URL("./worker.ts", import.meta.url), {
@@ -87,6 +96,7 @@ export function useVoxRunner() {
         switch (msg.type) {
           case "compiled":
             setIr(msg.ir);
+            setStages({ tokens: msg.tokens, tree: msg.tree, symbols: msg.symbols });
             append("warn", msg.warnings);
             break;
           case "compile-error":
@@ -160,7 +170,7 @@ export function useVoxRunner() {
 
   useEffect(() => () => killWorker(), [killWorker]);
 
-  return { status, lines, ir, run, stop, sendInput, clear };
+  return { status, lines, ir, stages, run, stop, sendInput, clear };
 }
 
 function formatMs(ms: number): string {

@@ -22,6 +22,10 @@ echo "typescript: $TS_CMD"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
+# Every stage in one invocation: tokens, parse tree, symbols and IR. Asking
+# for all four also exercises the section headings.
+STAGES="--emit-tokens --emit-tree --emit-symbols --emit-ir --check"
+
 pass=0
 fail=0
 failed_names=()
@@ -31,9 +35,9 @@ strip_cr() { tr -d '\r'; }
 for src in tests/run/*.vox tests/fail/*.vox docs/snippets/*.vox examples/*.vox; do
     # --check never runs the program, so stdin and runtime behaviour play no
     # part here: this compares compilation only.
-    $JAVA_CMD "$src" --emit-ir --check >"$tmp/j.out" 2>"$tmp/j.err" </dev/null
+    $JAVA_CMD "$src" $STAGES >"$tmp/j.out" 2>"$tmp/j.err" </dev/null
     j_status=$?
-    $TS_CMD "$src" --emit-ir --check >"$tmp/t.out" 2>"$tmp/t.err" </dev/null
+    $TS_CMD "$src" $STAGES >"$tmp/t.out" 2>"$tmp/t.err" </dev/null
     t_status=$?
 
     problem=""

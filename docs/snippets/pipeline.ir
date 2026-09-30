@@ -1,0 +1,6 @@
+   0  func_start main
+   1  mul t0 2 3
+   2  add t1 1 t0
+   3  set n t1
+   4  print n "\n"
+   5  func_end main

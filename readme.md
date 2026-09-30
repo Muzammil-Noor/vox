@@ -34,19 +34,38 @@
 Source Code (.vox)
         |
         v
-ANTLR Lexer & Parser        (generated from Vox.g4)
+ANTLR Lexer                 (generated from Vox.g4)     --emit-tokens
         |
         v
-    Parse Tree
+ANTLR Parser                (generated from Vox.g4)     --emit-tree
         |
-        +--> SemanticAnalyzer   (name resolution + type checking)
-        |
-        v
-     IRBuilder                  (parse tree -> IR instructions)
+        +--> SemanticAnalyzer   (names and types)        --emit-symbols
         |
         v
-     IRExecutor                 (executes IR on a custom VM)
+     IRBuilder                  (tree -> instructions)   --emit-ir
+        |
+        v
+     IRExecutor                 (runs them on a small VM) --trace
 ```
+
+Every arrow above can be watched. Each stage has a flag that prints what the
+compiler is holding at that point, so the diagram is something you can run
+rather than something you have to believe:
+
+```bash
+vox program.vox --emit-tokens   # what the text was chopped into
+vox program.vox --emit-tree     # how those tokens nested
+vox program.vox --emit-symbols  # every name, in the scope that owns it
+vox program.vox --emit-ir       # the instructions it all became
+vox program.vox --trace         # those instructions, in the order they ran
+```
+
+The parse tree is the one to look at first. Run it on `1 + 2 * 3` and the
+multiplication sits deeper than the addition: precedence is not a rule the
+compiler applies later, it is the shape the parser already built.
+
+The playground shows the same four stages in a panel beside your program, from
+the same formatters, so the website and the command line can never disagree.
 
 The grammar contains **no embedded Java**. It describes syntax only, so the
 same `Vox.g4` can generate a parser for any ANTLR target. All checking lives in
@@ -70,6 +89,7 @@ wrapped one in Java.
 | --------------------------------- | ---------------------------------------------------------------- |
 | `Vox.g4`                          | Grammar definition for the Vox language (shared by both engines) |
 | `src/VoxMain.java`                | Java entry point (parse -> check -> lower -> run)                |
+| `src/Inspect.java`                | Renders tokens and the parse tree for the `--emit` flags         |
 | `src/SemanticAnalyzer.java`       | Name resolution and type checking                                |
 | `src/IRBuilder.java`              | Converts the parse tree into IR instructions                     |
 | `src/IRExecutor.java`             | Executes IR instructions on a custom runtime                     |
@@ -175,12 +195,19 @@ vox <filename.vox>
 
 Options:
 
-| Option      | Effect                                               |
-| ----------- | ---------------------------------------------------- |
-| `--emit-ir` | Print the generated IR                               |
-| `--check`   | Parse and type-check only, do not run                |
-| `--steps N` | Change the execution step limit (default 50,000,000) |
-| `--version` | Print the version and exit                           |
+| Option           | Effect                                               |
+| ---------------- | ---------------------------------------------------- |
+| `--emit-tokens`  | Print the tokens the lexer produced                  |
+| `--emit-tree`    | Print the parse tree                                 |
+| `--emit-symbols` | Print the names the checker took in                  |
+| `--emit-ir`      | Print the generated IR                               |
+| `--trace`        | Print each instruction as it runs, on stderr         |
+| `--check`        | Parse and type-check only, do not run                |
+| `--steps N`      | Change the execution step limit (default 50,000,000) |
+| `--version`      | Print the version and exit                           |
+
+Ask for one stage and it prints bare; ask for several and each gets a heading.
+`--trace` writes to stderr, so the program's own output stays clean.
 
 Exit codes: `0` success, `1` compile error, `2` runtime error, `64` bad usage.
 
@@ -240,6 +267,7 @@ and the suite runs those too:
 | `NAME.out` | its exact stdout                                   |
 | `NAME.err` | its exact diagnostics, with the file path stripped |
 | `NAME.ir`  | its exact emitted IR                               |
+| `NAME.tokens`, `NAME.tree`, `NAME.symbols` | the matching `--emit` output |
 | `NAME.in`  | optional stdin                                     |
 
 `tests/parity.sh` is the cross-check: it compiles every program in the
