@@ -9,7 +9,7 @@
 # only for the OS it runs on. Verified on Windows; on Linux the launcher ends
 # up at dist/vox/bin/voxand on macOS jpackage writes a vox.app bundle.
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 VERSION="$(tr -d '[:space:]' < VERSION)"
 
@@ -24,7 +24,7 @@ case "$ARCH" in
     aarch64|arm64) ARCH=arm64 ;;
 esac
 
-[ -f build/vox.jar ] || ./build.sh
+[ -f build/vox.jar ] || ./scripts/build.sh
 
 echo "==> staging"
 rm -rf dist/stage dist/vox dist/vox.app
@@ -33,7 +33,7 @@ cp build/vox.jar dist/stage/
 
 EXTRA=()
 case "$OS" in
-    windows) EXTRA+=(--win-console --icon installer/vox.ico) ;;
+    windows) EXTRA+=(--win-console --icon scripts/installer/vox.ico) ;;
     linux)   EXTRA+=(--icon web/public/icon.png) ;;
 esac
 
@@ -68,7 +68,7 @@ if [ "$OS" = windows ]; then
     if [ -n "$ISCC" ]; then
         echo "==> building installer (Inno Setup)"
         # MSYS would otherwise rewrite /D... as a path.
-        MSYS_NO_PATHCONV=1 "$ISCC" /Q "/DAppVersion=$VERSION" installer/vox.iss
+        MSYS_NO_PATHCONV=1 "$ISCC" /Q "/DAppVersion=$VERSION" scripts/installer/vox.iss
     else
         echo "==> skipping installer: Inno Setup 6 not found (winget install JRSoftware.InnoSetup)"
     fi

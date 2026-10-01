@@ -1,6 +1,6 @@
 /**
  * The documentation page's text. Code and output are not written here: each
- * section names a snippet in docs/snippets/ and the page shows that program
+ * section names a snippet in programs/snippets/ and the page shows that program
  * together with the output the compiler actually produced for it.
  *
  * In prose, `text between backticks` is rendered as inline code.
@@ -763,7 +763,7 @@ export const REFERENCE: {
   {
     id: "ref-cli",
     title: "Command line",
-    note: "The same flags work on both engines: `vox file.vox` and `node core/dist/cli.js file.vox`.",
+    note: "The same flags work on both engines: `vox file.vox` and `node engines/typescript/dist/cli.js file.vox`.",
     table: {
       head: ["Flag or code", "Meaning"],
       rows: [

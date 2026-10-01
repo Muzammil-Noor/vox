@@ -15,8 +15,8 @@ import org.antlr.v4.runtime.tree.TerminalNode;
  *                ->  IR          --emit-ir
  *                ->  output      --trace shows each instruction as it runs
  *
- * The TypeScript port has the same formatters in core/src/inspect.ts, and
- * tests/parity.sh compares the two, so these two files must produce identical
+ * The TypeScript port has the same formatters in engines/typescript/src/inspect.ts, and
+ * scripts/parity.sh compares the two, so these two files must produce identical
  * text for identical input.
  */
 public final class Inspect {

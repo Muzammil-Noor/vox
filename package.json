@@ -2,11 +2,11 @@
   "name": "vox",
   "private": true,
   "workspaces": [
-    "core",
+    "engines/typescript",
     "web"
   ],
   "scripts": {
-    "build": "npm run build -w web",
-    "dev": "npm run build -w core && npm run dev -w web"
+    "build": "npm run build -w @vox/web",
+    "dev": "npm run build -w @vox/core && npm run dev -w @vox/web"
   }
 }

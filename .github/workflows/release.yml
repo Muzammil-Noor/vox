@@ -75,10 +75,10 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Build the jar
-        run: bash build.sh
+        run: bash scripts/build.sh
 
       - name: Test the jar
-        run: bash tests/run.sh
+        run: bash scripts/test.sh
 
       - name: Inno Setup
         run: |
@@ -87,10 +87,10 @@ jobs:
           fi
 
       - name: Package
-        run: bash package.sh
+        run: bash scripts/package.sh
 
       - name: Test the packaged vox.exe
-        run: VOX_CMD="dist/vox/vox.exe" bash tests/run.sh
+        run: VOX_CMD="dist/vox/vox.exe" bash scripts/test.sh
 
       - name: Checksums
         run: |

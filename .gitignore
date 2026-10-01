@@ -3,9 +3,9 @@ build/
 
 # Node / TypeScript
 node_modules/
-core/src/gen/
-core/dist/
+engines/typescript/src/gen/
+engines/typescript/dist/
 web/dist/
 
-# Packaged app image, zip and installer (package.bat / package.sh).
+# Packaged app image, zip and installer (scripts/package.bat / scripts/package.sh).
 dist/

@@ -1,707 +1,156 @@
-# Vox Programming Language
+# Vox
 
-**Vox** is a custom programming language built using ANTLR and Java, designed with a focus on natural-language-like syntax and a simplified execution model.
-[Read more about it](https://chaotiz.vercel.app/journal/vox)
+A small programming language that reads like English (and its compiler too i suppose)
 
-## Features
+[Read the story behind it](https://chaotiz.vercel.app/journal/vox)
 
-- Natural language-inspired syntax (e.g., `added to`, `is greater than`)
-- Custom-built compiler pipeline using ANTLR
-- Intermediate Representation (IR) generation via `IRBuilder`
-- Fully custom runtime using `IRExecutor` (no LLVM dependency)
+```java
+main {
+   let there be a whole number score which is equal to 17;
+   integer total <- score added to 3;
 
-### Supported Features
+   if (total is greater than 15) {
+      say "that is a good score";
+   }
 
-- Variables and data types
-- Arithmetic and logical expressions, with real operator precedence
-- Conditionals (`if`, `else if`, `otherwise`) and spoken predicates (`is even`, `is between 1 and 10`)
-- Loops: `while`, the classic `for`, range loops (`for i from 1 to 10`, `down to`, `step`) and `repeat 5 times` / `repeat ... until`
-- In-place updates in both spellings: `n++` / `increment n`, `n += 3` / `add 3 to n`, `double n`
-- The voice forms: `say`, `ask`, `set ... to`, `let ... be`, `swap ... and ...`
-- `print` writes raw text - `'\n'` ends a line; `say` always ends the line
-- Lists: `integer[] xs`, `list<integer>` or `xs is a list of integers`; `xs[i]` and `2nd item of xs`; `push`, `pop`, `insert`; `for each x in xs`
-- Dot calls: `a.f(b)` means `f(a, b)`, so `xs.push(5)`, `s.length()` and your own `n.twice()` all work
-- `lock`/`unlock` a list's size, `wrap`/`unwrap` its indexes, `fixed` arrays, `constant` names; `sort`, `reverse`, `sum of`, `largest of`, `position of`
-- Strings are sequences: `s[i]`, `1st character of s`, `for each ch in s`, `s from 0 until 5`, `split by`, `joined with`, `trim of`, `reversed of`, `starts with`
-- Randomness you can replay: `a random number between 1 and 6`, `shuffle xs`, `seed random with 7`; plus `x rounded to 2 places` and `stop the program;`
-- Functions, procedures, forward declarations and recursion
-- `main { }` may also be spelled `program { }` or `code { }`
-- Input/Output operations
-
-## Architecture Overview
-
-```
-Source Code (.vox)
-        |
-        v
-ANTLR Lexer                 (generated from Vox.g4)     --emit-tokens
-        |
-        v
-ANTLR Parser                (generated from Vox.g4)     --emit-tree
-        |
-        +--> SemanticAnalyzer   (names and types)        --emit-symbols
-        |
-        v
-     IRBuilder                  (tree -> instructions)   --emit-ir
-        |
-        v
-     IRExecutor                 (runs them on a small VM) --trace
+   for i from 1 to 5 {
+      say i squared;
+   }
+}
 ```
 
-Every arrow above can be watched. Each stage has a flag that prints what the
-compiler is holding at that point, so the diagram is something you can run
-rather than something you have to believe:
+Every one of those spellings has a symbolic twin. `score added to 3` and `score + 3` compile to the same instruction, so you can start with words and drift toward symbols as they stop being noise.
+
+## Two things this repository is for
+
+**Learning to program.** Vox is meant to be a first language. The syntax is close to the sentence you would have said out loud, the error messages are written for someone who does not yet know what a type is and there is nothing to install to try it: the whole compiler runs in the browser.
+
+**Learning how compilers work.** This is a complete compiler written without LLVM, without a parser generator you have to fight and without anything clever enough to hide what it is doing. It is about four thousand lines and every stage can be printed and looked at.
+
+## Try it without installing anything
+
+The playground runs the real compiler in your browser The documentation page beside it is the language reference and every example on it is a program from this repository that is tested on every push.
+
+## Install it
+
+Download the Windows installer from
+[Releases](https://github.com/Muzammil-Noor/vox/releases) and run it. It carries its own Java runtime, so nothing else is needed and it puts `vox` on your `PATH` for easy CLI access.
 
 ```bash
-vox program.vox --emit-tokens   # what the text was chopped into
-vox program.vox --emit-tree     # how those tokens nested
-vox program.vox --emit-symbols  # every name, in the scope that owns it
-vox program.vox --emit-ir       # the instructions it all became
-vox program.vox --trace         # those instructions, in the order they ran
-```
-
-The parse tree is the one to look at first. Run it on `1 + 2 * 3` and the
-multiplication sits deeper than the addition: precedence is not a rule the
-compiler applies later, it is the shape the parser already built.
-
-The playground shows the same four stages in a panel beside your program, from
-the same formatters, so the website and the command line can never disagree.
-
-The grammar contains **no embedded Java**. It describes syntax only, so the
-same `Vox.g4` can generate a parser for any ANTLR target. All checking lives in
-`SemanticAnalyzer.java`.
-
-Vox has **two engines** built from that one grammar:
-
-- **Java** (`src/`) - the reference implementation and CLI.
-- **TypeScript** (`core/`) - the same pipeline ported for the browser; it
-  powers the web demo.
-
-Both engines emit identical IR and pass the same regression suite. The one
-deliberate difference: TypeScript integers are **exact** (arbitrary precision),
-while Java ints wrap at 32 bits - so programs that overflow, like
-`factorial(13)`, give the mathematically correct answer in TypeScript and a
-wrapped one in Java.
-
-## Components
-
-| Path                              | Purpose                                                          |
-| --------------------------------- | ---------------------------------------------------------------- |
-| `Vox.g4`                          | Grammar definition for the Vox language (shared by both engines) |
-| `src/VoxMain.java`                | Java entry point (parse -> check -> lower -> run)                |
-| `src/Inspect.java`                | Renders tokens and the parse tree for the `--emit` flags         |
-| `src/SemanticAnalyzer.java`       | Name resolution and type checking                                |
-| `src/IRBuilder.java`              | Converts the parse tree into IR instructions                     |
-| `src/IRExecutor.java`             | Executes IR instructions on a custom runtime                     |
-| `core/`                           | TypeScript engine (`@vox/core`): same pipeline, browser-ready    |
-| `core/src/cli.ts`                 | Node CLI mirroring the Java one, for testing parity              |
-| `build.bat` / `build.sh`          | Java build; produces `build/vox.jar`                             |
-| `vox.bat`                         | CLI launcher for a source checkout (runs the jar)                |
-| `package.bat` / `package.sh`      | Standalone build: `dist/vox/`, a zip and the Windows installer   |
-| `installer/vox.iss`               | Inno Setup script for `vox-setup-<version>.exe`                  |
-| `.github/workflows/release.yml`   | Builds and publishes a release whenever `VERSION` changes        |
-| `VERSION`                         | The release version, stamped into the jar (`vox --version`)      |
-| `tests/run.sh`                    | Regression suite (drives either engine)                          |
-| `tests/parity.sh`                 | Checks both engines compile every program identically            |
-| `tests/report.mjs`                | Turns suite verdicts into the JSON the website's tests page reads |
-| `.github/workflows/tests.yml`     | Runs the whole suite on every push; publishes the Java results   |
-| `tools/antlr-4.13.2-complete.jar` | ANTLR dependency                                                 |
-
-## Installing Vox
-
-Nothing else needs to be installed: the download carries its own trimmed Java
-runtime.
-
-**Windows installer.** Run `vox-setup-<version>.exe`. It installs for the
-current user (no admin prompt), ticks "Add Vox to the PATH" by defaultand
-appears in Add/Remove Programs. Open a new terminal afterwards:
-
-```
 vox hello.vox
-vox --version
 ```
 
-**Zip.** Unpack `vox-<version>-windows-x64.zip` anywhere and put the `vox`
-folder on your `PATH`; `vox.exe` sits at its top level. Nothing is written
-outside that folder, so removing it is the uninstall.
+There is a zip as well, if you would rather not run an installer.
 
-## Building from source
+## Start here, if you came for the compiler
 
-### 1. Install a JDK
-
-Install JDK 11 or higher (JDK 14 or higher to package): https://adoptium.net/
-
-### 2. Build
-
-From the project folder:
-
-```bat
-build.bat
-```
-
-or, in a POSIX shell:
+The pipeline has five stages and **you can print what the compiler is holding after each one.** That is the fastest way in and it is the reason this repository is worth reading:
 
 ```bash
-./build.sh
+vox program.vox --emit-tokens    # Tokenizers output which is the text, chopped into tokens
+vox program.vox --emit-tree      # Just the tokens presented in a nested format
+vox program.vox --emit-symbols   # every name in the scope that owns it
+vox program.vox --emit-ir        # the instructions it became (Three Address Code)
+vox program.vox --trace          # those instructions, in the order they ran
 ```
 
-This generates the parser, compiles everything and packages a self-contained
-`build/vox.jar`.
+Try `--emit-tree` on `1 + 2 * 3` first. The multiplication comes out deeper than the addition and that is the whole of operator precedence. Its the shape the parser already built instead of being a rule applied afterwards.
 
-### 3. Put Vox on your PATH (optional)
+Then read these five files, in this order. Together they are the entire compiler.
 
-Add the project folder itself to your `PATH`. `vox.bat` locates its own jar, so
-no additional variable is needed.
+| Read this                            | To understand                      |
+| ------------------------------------ | ---------------------------------- |
+| `Vox.g4`                             | What the language is, as a grammar |
+| `engines/java/VoxMain.java`          | The pipeline, start to finish      |
+| `engines/java/SemanticAnalyzer.java` | Name resolution and type checking  |
+| `engines/java/IRBuilder.java`        | Turning a tree into instructions   |
+| `engines/java/IRExecutor.java`       | Running the IR                     |
 
-### 4. Package a standalone Vox (optional)
+`SemanticAnalyzer.java` looks alarming at fifteen hundred lines. It is not. It
+is one small method per kind of syntax, about ninety of them and you only ever
+read the one you care about.
 
-```bat
-package.bat
+The grammar contains **no embedded code**. It describes syntax and nothing else, which is why the same file can generate a parser for two different languages.
+
+## How the pipeline fits together
+
+```
+Source (.vox)
+   |
+   v
+Lexer                      generated from Vox.g4       --emit-tokens
+   |
+   v
+Parser                     generated from Vox.g4       --emit-tree
+   |
+   |
+   +--> SemanticAnalyzer   names and types             --emit-symbols
+   |
+   |
+   v
+IRBuilder                  tree -> instructions        --emit-ir
+   |
+   v
+IRExecutor                 runs them on a small VM     --trace
 ```
 
-or `./package.sh`. This uses `jpackage` (part of the JDK) to write `dist/vox/`:
-the `vox.exe` launcher, the jarand a runtime trimmed to the one Java module
-Vox needs, about 33 MB in total. It zips that folderand if
-[Inno Setup 6](https://jrsoftware.org/isinfo.php) is installed
-(`winget install JRSoftware.InnoSetup`) it also compiles
-`dist/vox-setup-<version>.exe` from `installer/vox.iss`. jpackage builds only
-for the OS it runs on.
+There are **two engines** built from that one grammar. The Java one in `engines/java/` is the reference implementation and the command line. The TypeScript one in `engines/typescript/` is the same pipeline ported to run in a browser and it is what powers the website.
 
-### 5. Release
+They are held to identical output, **instruction for instruction** and **error message for error message**, by `scripts/parity.sh`. There is one deliberate difference: TypeScript integers are exact, while Java ints wrap at 32 bits, so a program that overflows gives the mathematically correct answer in the browser and a wrapped one on the command line.
 
-Releases are built by GitHub Actions on a Windows runner, so nothing needs to
-be packaged locally and no tag has to be created by hand. To release:
+## What is where
 
-1. Set `VERSION` (say `0.2.0`).
-2. Commit and push.
+| Path                  | What it is                                                  |
+| --------------------- | ----------------------------------------------------------- |
+| `Vox.g4`              | The grammar. The specification both engines are built from  |
+| `engines/java/`       | The reference implementation and the command line           |
+| `engines/typescript/` | The same pipeline, for the browser                          |
+| `programs/`           | All 139 Vox programs, sorted by what each one proves        |
+| `web/`                | The website: landing page, docs, playground, test runner    |
+| `scripts/`            | Build, test, package                                        |
 
-The release workflow watches `VERSION`. When a push does not change it the
-build is skipped; when it does, the workflow builds the jar, runs the suite
-against it, packages, runs the suite again through the packaged `vox.exe`, and
-publishes release `v0.2.0` with the installer, the zip, `SHA256SUMS.txt` and
-notes generated from the commits since the last release. It creates the tag
-itself. A version with a suffix (`0.2.0-beta`) is marked as a pre-release.
-"Run workflow" on the Actions tab builds and publishes the current `VERSION`
-regardless.
+Two of those have a guide of their own, worth reading before you touch them:
+[programs/readme.md](programs/readme.md) and
+[scripts/readme.md](scripts/readme.md).
 
-The check compares the last commit against its parent, so the `VERSION` bump
-must be in the final commit of the push.
+### Why is there a package.json in a language project?
 
-## Usage
+Nothing in the Java engine touches npm. That file exists because the repository contains two JavaScript projects, `engines/typescript/` and `web/` and the website imports the TS engine as `@vox/core`. The root `package.json` declares the two as npm workspaces, which is what makes that import resolve and lets one `npm install` serve both. It has no dependencies of its own.
+
+**For all learning purposes, this package.json file at root can be ignored**
+
+## Build it yourself
+
+You need a JDK, version 11 or newer and Node 18 or newer for the browser engine.
 
 ```bash
-vox <filename.vox>
-```
+./scripts/build.sh          # generates the parser, writes build/vox.jar
+./scripts/test.sh           # runs all 139 programs
 
-Options:
-
-| Option           | Effect                                               |
-| ---------------- | ---------------------------------------------------- |
-| `--emit-tokens`  | Print the tokens the lexer produced                  |
-| `--emit-tree`    | Print the parse tree                                 |
-| `--emit-symbols` | Print the names the checker took in                  |
-| `--emit-ir`      | Print the generated IR                               |
-| `--trace`        | Print each instruction as it runs, on stderr         |
-| `--check`        | Parse and type-check only, do not run                |
-| `--steps N`      | Change the execution step limit (default 50,000,000) |
-| `--version`      | Print the version and exit                           |
-
-Ask for one stage and it prints bare; ask for several and each gets a heading.
-`--trace` writes to stderr, so the program's own output stays clean.
-
-Exit codes: `0` success, `1` compile error, `2` runtime error, `64` bad usage.
-
-You can also run the jar directly:
-
-```bash
-java -jar build/vox.jar examples/factorial.vox
-```
-
-### TypeScript engine
-
-Requires Node 18+ (and Java, to generate the parser):
-
-```bash
 npm install
-npm run build -w core  # generates the parser from Vox.g4, compiles core/
-node core/dist/cli.js examples/factorial.vox
+npm run build -w @vox/core  # the TypeScript engine
+npm run dev                 # the website, on a local server
 ```
 
-### Web playground
-
-`web/` is a React + Vite + Tailwind site. There is no backend: the TypeScript engine runs in a Web Worker so
-a runaway program can be stopped without freezing the page and `input()` prompts inline in the console. The editor runs the real compiler as you type and underlines syntax and semantic errors.
-
-```bash
-cd web
-npm run dev            # builds core, then starts the dev server
-npm run build          # builds core, then web/dist (static, deploy anywhere)
-```
+On Windows, `scripts\build.bat` does the same thing. `scripts/package.sh` builds the standalone application and the installer and needs a JDK 14 or newer for `jpackage`.
 
 ## Tests
 
-```bash
-./tests/run.sh                                     # Java engine
-VOX_CMD="node core/dist/cli.js" ./tests/run.sh     # TypeScript engine
-./tests/parity.sh                                  # the two against each other
-```
-
-Every push runs all three on both Linux and Windows, plus the web apps type
-check and build, via `.github/workflows/tests.yml`.
-
-`tests/run/` holds programs with expected output (plus optional `.in` stdin),
-`tests/fail/` holds programs that must be rejected with a given exit code and
-message. The same suite drives both engines, which keeps them in lockstep.
-It can also drive the packaged launcher, which is how a release gets checked:
+139 programs, each checked against exactly what it must print or exactly how it must fail, on both engines, on Linux and Windows, on every push.
 
 ```bash
-VOX_CMD="dist/vox/vox.exe" ./tests/run.sh
+./scripts/test.sh          # one engine against every program
+./scripts/parity.sh        # both engines against each other
 ```
 
-`docs/snippets/` holds the examples shown on the website's documentation page,
-and the suite runs those too:
+The website's `/tests` page runs the whole suite live in your browser and shows the Java results from CI beside it.
 
-| File       | Checked against                                    |
-| ---------- | -------------------------------------------------- |
-| `NAME.vox` | the program                                        |
-| `NAME.out` | its exact stdout                                   |
-| `NAME.err` | its exact diagnostics, with the file path stripped |
-| `NAME.ir`  | its exact emitted IR                               |
-| `NAME.tokens`, `NAME.tree`, `NAME.symbols` | the matching `--emit` output |
-| `NAME.in`  | optional stdin                                     |
+## Documentation
 
-`tests/parity.sh` is the cross-check: it compiles every program in the
-repository with both engines and requires the same IR, the same diagnostics
-and the same exit code. `run.sh` proves each engine matches its expected
-output; `parity.sh` catches a feature added to one engine and forgotten in the
-other, even where no test covers it yet.
+The website's `/docs` page is the language reference, and every snippet on it
+is a tested program from `programs/snippets/`. That is why it cannot drift: the
+page and the regression suite read the same files.
 
-### Publishing results to the website
+## Licence
 
-The tests page runs the TypeScript engine live in the visitor's browser. A
-browser cannot run the Java engine so those results are published by CI
-instead.
-
-Set `VOX_REPORT` and the suite also writes a verdict per test, using the same
-test ids the page uses:
-
-```bash
-VOX_REPORT=java.tsv ./tests/run.sh
-node tests/report.mjs --out latest.json windows=java.tsv linux=other.tsv
-```
-
-On every push to `main`, `tests.yml` collects one of those files from the
-Windows runner and one from Linux, merges them, and force-pushes the result to
-the **`test-results` branch** as `latest.json`. The page fetches it from there.
-
-That branch is a pointer, not an archive: each run replaces it with a single
-fresh commit. Nothing is ever committed to `main`, so there is no bot commit to
-pull and no extra deploy. Results are published even when the suite fails,
-because a red square is worth showing. A run from any branch other than `main`
-publishes nothing.
-
-The page displays those same files, so a documented example cannot drift from
-the compiler: change the language and the docs fail the build.
-
-## Examples
-
-Runnable copies of these live in [examples/](examples/).
-
-### Example # 1
-
-```java
-integer hailstone(integer n) {
-
-    while (n is greater than 1) {
-        say n;
-
-        if ((n % 2) == 0) {
-            n = n divided by 2;
-        }
-        else {
-            n = n times 3 + 1;
-        }
-    }
-
-    say 1;
-    return n;
-
-}
-
-main {
-    consider an integer start which is equal to 13;
-    hailstone(start);
-}
-```
-
-### Example # 2
-
-```java
-integer factorial(integer n) {
-
-    integer result <- 1;
-    integer i <- 2;
-
-    while (i <= n) {
-        result <- result multiplied by i;
-        i <- i + 1;
-    }
-    return result;
-}
-
-main {
-
-    consider an integer value which is equal to 6;
-    integer answer <- factorial(value);
-    say answer;
-
-}
-```
-
-## Language notes
-
-### Operators, highest precedence first
-
-| Level | Operators                                                                                                              |
-| ----- | ---------------------------------------------------------------------------------------------------------------------- |
-| 1     | `( )`                                                                                                                  |
-| 2     | `xs[i]` (an item of a list), `a.f(b)` (a dot call)                                                                     |
-| 3     | `as` (cast)                                                                                                            |
-| 4     | `squared`, `cubed`                                                                                                     |
-| 5     | spoken builtins (`square root of`, `length of`, ...), `Nth item of`, `pop`, `ask`                                      |
-| 6     | `^` `**` / `to the power of` / `raised to the power of` (right associative)                                            |
-| 7     | unary `-`                                                                                                              |
-| 8     | `not` / `!` / `~`                                                                                                      |
-| 9     | `*` `/` `%` / `multiplied by` / `times` / `divided by` / `remainder from`                                              |
-| 10    | `+` `-` / `added to` / `plus` / `minus`                                                                                |
-| 11    | `subtracted from`                                                                                                      |
-| 12    | predicates: `is even`, `is odd`, `is positive`, `is negative`, `is empty`, `is divisible by`, `is between ... and ...`, `is in`, `contains`, `starts with`, `ends with`, `from ... to ...` (slice), `split by`, `joined with` |
-| 13    | `<` `>` `<=` `>=` / `is less than` / `is greater than` / ...                                                           |
-| 14    | `==` `!=` / `is` / `is equal to` / `equals` / `equals to` / `is not`                                                   |
-| 15    | `&&` `&` / `and`                                                                                                       |
-| 16    | `\|\|` `\|` / `or`                                                                                                     |
-
-`a subtracted from b` evaluates to `b - a`. Prefix and postfix forms apply to
-the term next to them: `-x squared` is `-(x squared)`, `2 * x squared` is
-`2 * (x squared)` and `square root of x squared` is `sqrt(x squared)`.
-
-Multi-word operators and declaration starters may span newlines, so this is
-valid:
-
-```java
-if (total is greater
-    than 15) { ... }
-```
-
-### Assignment
-
-Assignment is `=`, `<-`, `which is equal to` or `which equals`. Reverse
-assignment is `->`.
-
-`<=` and `=>` are **comparisons only**. They previously doubled as assignment
-operators, which made the grammar ambiguous.
-
-### Declarations
-
-```java
-integer x;                                  // defaults to 0
-integer y <- 5;
-consider an integer z which is equal to 7;
-let there be a whole number w which equals 9;
-5 -> integer v;                             // reverse declaration
-```
-
-Defaults are `0` for `integer`, `0.0` for `float`, `false` for `boolean` and
-the empty string for `string` and `character`.
-
-A name cannot be declared again while one is visible - in the same block or an
-enclosing one - so no variable is ever shadowedand a local cannot reuse a
-parameter's name. Sibling blocks may reuse a name, since neither can see the
-other's.
-
-### input()
-
-`input()` reads one line and coerces it: digits become an `integer`,
-`12.5` becomes a `float`, `true`/`false` become a `boolean`, anything else
-stays a `string`. It is accepted wherever a value is expected.
-
-### print, say and newlines
-
-`print` writes exactly what you give it - **no newline is added**. Print
-`'\n'` where a line should end. `say` is the spoken line-form: it prints its
-arguments and then ends the line for you.
-
-```java
-print("loading");
-print(".", ".", ".", '\n');   // loading...
-print("a"); print("b");       // ab - still the same line
-say "done";                   // done, newline included
-```
-
-String literals take either quote style (`"\n"` or `'\n'`); escapes are `\n`,
-`\t`, `\r`, `\"`, `\'` and `\\`.
-
-`ask` prints its prompt (no newline, so the answer lands on the same line) and
-reads one line back, coerced exactly like `input()`:
-
-```java
-integer age <- ask "How old are you? ";
-let name be ask "Who is this? ";
-```
-
-`ask` applies to the term right after it; parenthesise a longer prompt:
-`ask ("Hello " + name + ", how old?")`.
-
-### Spoken assignment: set, let and swap
-
-`set total to 0;` is assignment, exactly as taught. `let x be 5;` declares a
-new variable and infers its type from the value (`let line be an input;` stays
-dynamic). `swap a and b;` exchanges two variables through a hidden temporary.
-
-```java
-let price be 12.5;            // float, inferred
-set the price to price * 2;
-swap price and limit;
-```
-
-`x is equal to 5;` on its own is a comparison, not an assignment; the compiler
-warns that it has no effect and points you at `set`.
-
-### Predicates
-
-Conditions can be spoken and `is not` negates every predicate:
-
-| Predicate                        | Meaning                |
-| -------------------------------- | ---------------------- |
-| `n is even`, `n is odd`          | parity, integers only  |
-| `x is positive`, `x is negative` | sign of any number     |
-| `n is divisible by k`            | `n % k == 0`           |
-| `x is between a and b`           | inclusive on both ends |
-| `s is empty`                     | the string is `""`     |
-
-```java
-if (year is divisible by 4 and year is not divisible by 100) { ... }
-if (guess is between 1 and 100) { ... }
-```
-
-### Repeat loops
-
-`repeat 5 times { ... }` runs a block a fixed number of times without naming a
-counter; the count is any integer expression, evaluated once.
-`repeat { ... } until (done)` runs the body at least once and stops when the
-condition becomes true. `stop;` and `skip;` work inside both.
-
-### Negation, casts and builtins
-
-Unary minus works on any number: `-x`, `-(a + b)`, `2 ^ -1`. It binds looser
-than `^`, so `-2 ^ 2` is `-4`.
-
-`value as type` converts explicitly and fails loudly when it cannot:
-
-```java
-integer n <- an input as integer;      // "42" -> 42; "abc" is a runtime error
-float half <- (7 as float) / 2;        // 3.5
-string label <- 5 as string + "!";     // "5!"
-```
-
-Builtin functions have a spoken and a symbolic form; a user-defined function
-with the same name takes precedence:
-
-| Spoken                             | Symbolic                       | Result                     |
-| ---------------------------------- | ------------------------------ | -------------------------- |
-| `square root of x`                 | `sqrt(x)`                      | float                      |
-| `absolute value of x`              | `abs(x)`                       | same type as `x`           |
-| `floor of x`, `ceiling of x`       | `floor(x)`, `ceiling(x)`       | integer                    |
-| -                                  | `round(x)`                     | integer                    |
-| -                                  | `min(a, b)`, `max(a, b)`       | float if either is a float |
-| `length of s`                      | `length(s)`                    | integer                    |
-| `uppercase of s`, `lowercase of s` | `uppercase(s)`, `lowercase(s)` | string                     |
-
-Spoken builtins apply to the term right after them: `length of s + 1` is
-`length(s) + 1`.
-
-### Control flow
-
-- `else if` chains, with `otherwise` as a synonym for `else`.
-- `stop;` (or `break;`) leaves the innermost loop; `skip;` (or `continue;`)
-  moves to its next iteration. Both are compile errors outside a loop.
-
-### In-place updates
-
-An update changes a variable where it stands. Updates are statements, not
-expressions: `i++` has no value, so `x <- i++` is a syntax error rather than a
-trap. Every spoken form lowers to the same single IR instruction as its
-symbolic twin.
-
-| Symbolic               | Spoken                                                                                                    |
-| ---------------------- | --------------------------------------------------------------------------------------------------------- |
-| `n++;` / `++n;`        | `increment n;`, `increment the n;`, `n is incremented;`                                                   |
-| `n--;` / `--n;`        | `decrement n;`, `decrement the n;`, `n is decremented;`                                                   |
-| `n += x;`              | `increase n by x;`, `add x to n;`, `x is added to n;`                                                     |
-| `n -= x;`              | `decrease n by x;`, `subtract x from n;`, `take x from n;`, `remove x from n;`, `x is subtracted from n;` |
-| `n *= x;`              | `multiply n by x;`                                                                                        |
-| `n /= x;`              | `divide n by x;`                                                                                          |
-| `n %= x;`              | -                                                                                                         |
-| `n ^= x;` / `n **= x;` | -                                                                                                         |
-| `n *= 2;`              | `double n;`, `n is doubled;`                                                                              |
-| `n /= 2;`              | `halve n;`, `n is halved;`                                                                                |
-
-`the` is optional after every verb (`add 3 to the total`). An update is
-type-checked exactly like the assignment it stands for: `s += "!"` concatenates
-when `s` is a string, `halve n` on an integer is integer division and
-`increment name` on a string is a compile error. The classic `for` loop takes
-an update as its third clause: `for (integer i <- 1; i <= 5; i++)`.
-
-The verbs, the range-loop words, the voice words and the list words (`add`,
-`double`, `to`, `from`, `by`, `the`, `step`, `until`, `say`, `ask`, `set`,
-`let`, `be`, `swap`, `repeat`, `even`, `odd`, `list`, `in`, `at`, `push`,
-`pop`, `insert`, `into`, `contains`, `lock`, `wrap`, `sort`, `reverse`,
-`shuffle`, `fixed`, `constant`, `always`, `starts`, `ends`, `with`,
-`places`, ...) are keywords, so they cannot name a variable or a function.
-The multi-word forms are single tokens, so `split`, `join`, `trim`, `random`
-and `seed` stay ordinary names: `split(s, " ")` and `s.split(" ")` are plain
-calls.
-
-### Range loops
-
-```java
-for i from 1 to 10 { ... }             // 1, 2, ..., 10
-for i from 0 until 10 { ... }          // 0, 1, ..., 9
-for i from 10 down to 1 { ... }        // 10, 9, ..., 1
-for i from 0 to 100 step 5 { ... }     // also: by 5, in steps of 5
-for float x from 0.0 to 1.0 step 0.25 { ... }
-```
-
-`to` is inclusive, `until` is exclusive and `down to` counts down. The loop
-variable is a fresh `integer` (or the type given) scoped to the loop. The
-start, end and step are evaluated once, before the first iteration, so
-reassigning the bound inside the body does not change how many times it runs.
-The step must be positive; to count down, say `down to`. Parentheses around the
-clause are optional.
-
-### Lists
-
-```java
-list<integer> a;                       // empty; also: integer[] a; integer a[];
-b is a list of integers;               // spoken
-integer zeros[3];                      // [0, 0, 0]
-let primes be [2, 3, 5];               // inferred: list of integer
-integer[][] grid <- [[1, 2], [3, 4]];  // lists nest
-
-say primes[0], " ", 1st item of primes;   // 2 2 - subscripts count from 0, ordinals from 1
-set the 2nd item of primes to 33;
-primes[0]++;
-
-push 7 to primes;                      // append; also push(primes, 7)
-push 1 to primes at 0;                 // before item 0; also insert 1 into primes at 0
-let last be pop primes;                // remove and return the last item; `pop primes at i` picks one
-say length of primes, " ", primes contains 33, " ", primes is empty;
-
-for each p in primes { say p; }        // also: for every p in primes; for (integer p : primes)
-```
-
-Lists are references: `ys <- xs` makes two names for one listand a function
-that receives a list works on the caller's list. `copy of xs` makes a separate
-one. `is` compares lists item by item. Indexes run from `0` to `length - 1`;
-anything else - including a negative index - is a runtime error, as is popping
-an empty list. Ordinals are checked: `2th item` is a compile error that tells
-you to write `2nd`. Inside `for each` the length is re-read every turn, so
-pushing to the list extends the loop.
-
-`sort xs;` and `reverse xs;` change a list in place; `sum of xs`, `largest of
-xs`, `smallest of xs` and `position of x in xs` (`-1` when absent) read it.
-Each also has a function form and a dot form: `sum(xs)`, `xs.sum()`.
-
-### Text
-
-A string is a sequence of charactersand the list vocabulary applies to it:
-
-```java
-string s <- "Hello, Vox";
-say s[0], " ", 1st character of s;     // H H - both count to the same place
-say length of s;                       // 10
-for each ch in s { print(ch, "."); }
-
-say s from 0 until 5;                  // Hello  (`to` includes the far end)
-say s contains "Vox", " ", s starts with "He", " ", s ends with "x";
-say position of "Vox" in s;            // 7, or -1 when absent
-
-say trim of "  padded  ";
-say reversed of "stressed";            // desserts
-say replace("banana", "na", "NA");
-string[] words <- "the quick fox" split by " ";
-say words joined with "+";             // the+quick+fox
-say characters of "hi";                // ["h", "i"]
-```
-
-Strings never change in place: `s[0] <- "z"` is a compile error, because
-every one of these returns a new string. `character` is a spelling of
-`string` - a one-character string is just a string.
-
-### Randomness
-
-```java
-seed random with 7;                    // omit this and every run differs
-say a random number between 1 and 6;   // both bounds included
-say a random item of words;
-shuffle deck;
-```
-
-The generator is a 32-bit xorshift written out in both engines, so a seeded
-program deals the same numbers in Java and in the browser - which is what lets
-a game have a regression test.
-
-### Rounding and stopping
-
-`x rounded to 2 places` gives a float rounded to that many decimals.
-`stop the program;` ends the run wherever it is, however deep inside a call.
-
-### Dot calls
-
-`a.f(b)` means exactly `f(a, b)`: the thing before the dot becomes the first
-argument. That one rule gives every list operation and builtin a method
-spellingand your own functions too:
-
-```java
-xs.push(5);                    // push(xs, 5)
-say s.length(), " ", xs.sum(); // length(s), sum(xs)
-say 21.twice();                // your own integer twice(integer n)
-say xs.copy().pop();           // calls chain left to right
-```
-
-Parentheses are always required. The spoken forms and the plain function
-forms remain; all three compile to the same instruction.
-
-### Locks, wrapping and constants
-
-`lock xs;` freezes a list's size: `push`, `insert` and `pop` are runtime errors
-until `unlock xs;`. Items stay writable. The lock belongs to the list, so every
-alias sees it. `fixed integer xs[5];` declares a list that is born lockedand
-`xs is locked` asks.
-
-`wrap xs;` makes indexes count around the ends: `xs[-1]` is the last item,
-`xs[length]` is the first againand ordinals follow (`5th item of` a 3-list is
-the 2nd). It applies to reads, writes, `pop at` and ordinals, never to
-`insert at`. `unwrap xs;` restores the strict rule; `xs is wrapping` asks.
-
-`constant integer MAX <- 3;` and `let NAME always be value;` declare names that
-cannot be assigned again - a compile error, not a runtime one. A constant list
-is a constant *name*; the list it refers to may still change.
-
-### Powers
-
-`x ^ y`, `x ** y`, `x to the power of y` and `x raised to the power of y` are
-the same operator. `x squared` and `x cubed` are postfix spellings of `x ^ 2`
-and `x ^ 3`.
-
-### Procedures
-
-A function that returns nothing is declared with `procedure`, `void` or
-`nothing`. It may `return;` early but cannot return a value and calling it
-where a value is expected is a compile error.
-
-```java
-procedure greet(string who) {
-    say "hello, ", who;
-}
-```
+GPL-3.0. See [LICENSE](LICENSE).

@@ -12,8 +12,8 @@ import VoxLexer from "./gen/VoxLexer.js";
  *                ->  IR          --emit-ir
  *                ->  output      --trace shows each instruction as it runs
  *
- * The Java engine has the same formatters in src/Inspect.java, and
- * tests/parity.sh compares the two, so these two files must produce identical
+ * The Java engine has the same formatters in engines/java/Inspect.java, and
+ * scripts/parity.sh compares the two, so these two files must produce identical
  * text for identical input.
  */
 

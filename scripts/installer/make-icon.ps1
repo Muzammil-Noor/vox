@@ -1,10 +1,10 @@
-# Builds installer\vox.ico from web\public\icon.png: pads the picture to a
+# Builds scripts\installer\vox.ico from web\public\icon.png: pads the picture to a
 # square, scales it to the standard icon sizes and wraps the PNGs in an ICO
 # container. Needs only Windows PowerShell (System.Drawing), no other tools.
 #
-#   powershell -ExecutionPolicy Bypass -File installer\make-icon.ps1
+#   powershell -ExecutionPolicy Bypass -File scripts\installer\make-icon.ps1
 param(
-    [string]$Source = (Join-Path $PSScriptRoot '..\web\public\icon.png'),
+    [string]$Source = (Join-Path $PSScriptRoot '..\..\web\public\icon.png'),
     [string]$Out    = (Join-Path $PSScriptRoot 'vox.ico')
 )
 $ErrorActionPreference = 'Stop'

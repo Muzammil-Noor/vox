@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 if [ -z "${VOX_CMD:-}" ]; then
     JAR="build/vox.jar"
     if [ ! -f "$JAR" ]; then
-        echo "tests: $JAR not found - run ./build.sh first" >&2
+        echo "tests: $JAR not found - run ./scripts/build.sh first" >&2
         exit 1
     fi
     VOX_CMD="java -jar $JAR"
@@ -28,9 +28,9 @@ record() {
 }
 
 # ---- programs that must run and produce exact output ------------------------
-for src in tests/run/*.vox; do
+for src in programs/run/*.vox; do
     name="$(basename "$src" .vox)"
-    expected_file="tests/run/$name.out"
+    expected_file="programs/run/$name.out"
 
     if [ ! -f "$expected_file" ]; then
         echo "MISS  $name (no .out file)"
@@ -38,7 +38,7 @@ for src in tests/run/*.vox; do
         fail=$((fail + 1)); failed_names+=("$name"); continue
     fi
 
-    stdin_file="tests/run/$name.in"
+    stdin_file="programs/run/$name.in"
     [ -f "$stdin_file" ] || stdin_file="/dev/null"
 
     actual="$($VOX_CMD "$src" < "$stdin_file" 2>/dev/null | strip_cr)"
@@ -63,9 +63,9 @@ for src in tests/run/*.vox; do
 done
 
 # ---- programs that must be rejected ----------------------------------------
-for src in tests/fail/*.vox; do
+for src in programs/fail/*.vox; do
     name="$(basename "$src" .vox)"
-    expect_file="tests/fail/$name.expect"
+    expect_file="programs/fail/$name.expect"
 
     if [ ! -f "$expect_file" ]; then
         echo "MISS  $name (no .expect file)"
@@ -108,24 +108,24 @@ done
 # Every code block on the website's /docs page is a real program here, checked
 # against the output the page shows. Docs cannot drift from the compiler.
 #
-#   docs/snippets/NAME.vox  + NAME.out   exact stdout
+#   programs/snippets/NAME.vox  + NAME.out   exact stdout
 #                           + NAME.err   exact diagnostics (path prefix stripped)
 #                           + NAME.ir    exact emitted IR
 #                           + NAME.tokens, NAME.tree, NAME.symbols
 #                                        exact output of the matching --emit flag
 #                           + NAME.in    optional stdin
-for src in docs/snippets/*.vox; do
+for src in programs/snippets/*.vox; do
     name="$(basename "$src" .vox)"
-    stdin_file="docs/snippets/$name.in"
+    stdin_file="programs/snippets/$name.in"
     [ -f "$stdin_file" ] || stdin_file="/dev/null"
 
     problem=""
     checked=0
 
-    if [ -f "docs/snippets/$name.out" ]; then
+    if [ -f "programs/snippets/$name.out" ]; then
         checked=1
         actual="$($VOX_CMD "$src" < "$stdin_file" 2>/dev/null | strip_cr)"
-        expected="$(strip_cr < "docs/snippets/$name.out")"
+        expected="$(strip_cr < "programs/snippets/$name.out")"
         if [ "$actual" != "$expected" ]; then
             problem="stdout mismatch"
             diff <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") \
@@ -133,12 +133,12 @@ for src in docs/snippets/*.vox; do
         fi
     fi
 
-    if [ -z "$problem" ] && [ -f "docs/snippets/$name.err" ]; then
+    if [ -z "$problem" ] && [ -f "programs/snippets/$name.err" ]; then
         checked=1
         # Diagnostics carry the source path; the page shows them without it.
         actual="$($VOX_CMD "$src" < "$stdin_file" 2>&1 >/dev/null \
             | strip_cr | sed -e "s|^$src: *||" -e 's/^\(> \)*//')"
-        expected="$(strip_cr < "docs/snippets/$name.err")"
+        expected="$(strip_cr < "programs/snippets/$name.err")"
         if [ "$actual" != "$expected" ]; then
             problem="stderr mismatch"
             diff <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") \
@@ -146,20 +146,20 @@ for src in docs/snippets/*.vox; do
         fi
     fi
 
-    if [ -z "$problem" ] && [ -f "docs/snippets/$name.ir" ]; then
+    if [ -z "$problem" ] && [ -f "programs/snippets/$name.ir" ]; then
         checked=1
         actual="$($VOX_CMD "$src" --emit-ir --check 2>/dev/null | strip_cr)"
-        expected="$(strip_cr < "docs/snippets/$name.ir")"
+        expected="$(strip_cr < "programs/snippets/$name.ir")"
         [ "$actual" = "$expected" ] || problem="IR mismatch"
     fi
 
     # The pipeline stages, so a page that shows them cannot drift either.
     for stage in tokens tree symbols; do
         [ -n "$problem" ] && break
-        [ -f "docs/snippets/$name.$stage" ] || continue
+        [ -f "programs/snippets/$name.$stage" ] || continue
         checked=1
         actual="$($VOX_CMD "$src" --emit-$stage --check 2>/dev/null | strip_cr)"
-        expected="$(strip_cr < "docs/snippets/$name.$stage")"
+        expected="$(strip_cr < "programs/snippets/$name.$stage")"
         if [ "$actual" != "$expected" ]; then
             problem="$stage mismatch"
             diff <(printf '%s
@@ -182,9 +182,9 @@ for src in docs/snippets/*.vox; do
 done
 
 # ---- the shipped examples must at least run ---------------------------------
-for src in examples/*.vox; do
+for src in programs/examples/*.vox; do
     name="$(basename "$src" .vox)"
-    stdin_file="examples/$name.in"
+    stdin_file="programs/examples/$name.in"
     [ -f "$stdin_file" ] || stdin_file="/dev/null"
     if $VOX_CMD "$src" < "$stdin_file" >/dev/null 2>&1; then
         echo "ok    example:$name"

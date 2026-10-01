@@ -1,62 +1,62 @@
-const runSources = import.meta.glob("../../../tests/run/*.vox", {
+const runSources = import.meta.glob("../../../programs/run/*.vox", {
   query: "?raw",
   import: "default",
   eager: true,
 }) as Record<string, string>;
-const runOutputs = import.meta.glob("../../../tests/run/*.out", {
+const runOutputs = import.meta.glob("../../../programs/run/*.out", {
   query: "?raw",
   import: "default",
   eager: true,
 }) as Record<string, string>;
-const runStdins = import.meta.glob("../../../tests/run/*.in", {
-  query: "?raw",
-  import: "default",
-  eager: true,
-}) as Record<string, string>;
-
-const failSources = import.meta.glob("../../../tests/fail/*.vox", {
-  query: "?raw",
-  import: "default",
-  eager: true,
-}) as Record<string, string>;
-const failExpects = import.meta.glob("../../../tests/fail/*.expect", {
+const runStdins = import.meta.glob("../../../programs/run/*.in", {
   query: "?raw",
   import: "default",
   eager: true,
 }) as Record<string, string>;
 
-const docsSources = import.meta.glob("../../../docs/snippets/*.vox", {
+const failSources = import.meta.glob("../../../programs/fail/*.vox", {
   query: "?raw",
   import: "default",
   eager: true,
 }) as Record<string, string>;
-const docsOutputs = import.meta.glob("../../../docs/snippets/*.out", {
-  query: "?raw",
-  import: "default",
-  eager: true,
-}) as Record<string, string>;
-const docsErrors = import.meta.glob("../../../docs/snippets/*.err", {
-  query: "?raw",
-  import: "default",
-  eager: true,
-}) as Record<string, string>;
-const docsIrs = import.meta.glob("../../../docs/snippets/*.ir", {
-  query: "?raw",
-  import: "default",
-  eager: true,
-}) as Record<string, string>;
-const docsStdins = import.meta.glob("../../../docs/snippets/*.in", {
+const failExpects = import.meta.glob("../../../programs/fail/*.expect", {
   query: "?raw",
   import: "default",
   eager: true,
 }) as Record<string, string>;
 
-const exampleSources = import.meta.glob("../../../examples/*.vox", {
+const docsSources = import.meta.glob("../../../programs/snippets/*.vox", {
   query: "?raw",
   import: "default",
   eager: true,
 }) as Record<string, string>;
-const exampleStdins = import.meta.glob("../../../examples/*.in", {
+const docsOutputs = import.meta.glob("../../../programs/snippets/*.out", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+const docsErrors = import.meta.glob("../../../programs/snippets/*.err", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+const docsIrs = import.meta.glob("../../../programs/snippets/*.ir", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+const docsStdins = import.meta.glob("../../../programs/snippets/*.in", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+
+const exampleSources = import.meta.glob("../../../programs/examples/*.vox", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+const exampleStdins = import.meta.glob("../../../programs/examples/*.in", {
   query: "?raw",
   import: "default",
   eager: true,
@@ -155,8 +155,8 @@ function build(): TestCase[] {
       id: `run/${name}`,
       name,
       group: "run",
-      path: `tests/run/${name}.vox`,
-      source: norm(runSources[`../../../tests/run/${name}.vox`]),
+      path: `programs/run/${name}.vox`,
+      source: norm(runSources[`../../../programs/run/${name}.vox`]),
       stdin: optional(runIn, name),
       expect: { stdout: optional(runOut, name) ?? "" },
     });
@@ -169,8 +169,8 @@ function build(): TestCase[] {
       id: `fail/${name}`,
       name,
       group: "fail",
-      path: `tests/fail/${name}.vox`,
-      source: norm(failSources[`../../../tests/fail/${name}.vox`]),
+      path: `programs/fail/${name}.vox`,
+      source: norm(failSources[`../../../programs/fail/${name}.vox`]),
       expect: {
         exitCode: Number(lines[0]),
         contains: lines.slice(1).filter((line) => line !== ""),
@@ -187,8 +187,8 @@ function build(): TestCase[] {
       id: `docs/${name}`,
       name,
       group: "docs",
-      path: `docs/snippets/${name}.vox`,
-      source: norm(docsSources[`../../../docs/snippets/${name}.vox`]),
+      path: `programs/snippets/${name}.vox`,
+      source: norm(docsSources[`../../../programs/snippets/${name}.vox`]),
       stdin: optional(docsIn, name),
       expect: {
         stdout: optional(docsOut, name),
@@ -204,8 +204,8 @@ function build(): TestCase[] {
       id: `examples/${name}`,
       name,
       group: "examples",
-      path: `examples/${name}.vox`,
-      source: norm(exampleSources[`../../../examples/${name}.vox`]),
+      path: `programs/examples/${name}.vox`,
+      source: norm(exampleSources[`../../../programs/examples/${name}.vox`]),
       stdin: optional(exampleIn, name),
       expect: { exitCode: 0 },
     });

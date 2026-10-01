@@ -5,14 +5,14 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 JAVA_CMD="${JAVA_CMD:-java -jar build/vox.jar}"
-TS_CMD="${TS_CMD:-node core/dist/cli.js}"
+TS_CMD="${TS_CMD:-node engines/typescript/dist/cli.js}"
 
 if [ "$JAVA_CMD" = "java -jar build/vox.jar" ] && [ ! -f build/vox.jar ]; then
-    echo "parity: build/vox.jar not found - run ./build.sh first" >&2
+    echo "parity: build/vox.jar not found - run ./scripts/build.sh first" >&2
     exit 1
 fi
-if [ ! -f core/dist/cli.js ] && [ "$TS_CMD" = "node core/dist/cli.js" ]; then
-    echo "parity: core/dist/cli.js not found - run 'npm run build -w core' first" >&2
+if [ ! -f engines/typescript/dist/cli.js ] && [ "$TS_CMD" = "node engines/typescript/dist/cli.js" ]; then
+    echo "parity: engines/typescript/dist/cli.js not found - run 'npm run build -w @vox/core' first" >&2
     exit 1
 fi
 
@@ -32,7 +32,7 @@ failed_names=()
 
 strip_cr() { tr -d '\r'; }
 
-for src in tests/run/*.vox tests/fail/*.vox docs/snippets/*.vox examples/*.vox; do
+for src in programs/run/*.vox programs/fail/*.vox programs/snippets/*.vox programs/examples/*.vox; do
     # --check never runs the program, so stdin and runtime behaviour play no
     # part here: this compares compilation only.
     $JAVA_CMD "$src" $STAGES >"$tmp/j.out" 2>"$tmp/j.err" </dev/null

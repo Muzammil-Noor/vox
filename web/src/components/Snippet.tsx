@@ -6,7 +6,7 @@ import { encodeSource } from "../share";
 
 /**
  * One documented example: the program, what it printed and any messages the
- * compiler gave. All three come from docs/snippets/, where the regression
+ * compiler gave. All three come from programs/snippets/, where the regression
  * suite runs them on both engines - so what is shown here is what happens.
  */
 

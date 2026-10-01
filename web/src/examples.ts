@@ -1,14 +1,14 @@
 // The example programs are the same files the regression suite runs, imported
-// straight from the repo's examples/ directory so the site never drifts from
+// straight from the repo's programs/examples/ directory so the site never drifts from
 // what actually works.
-import hailstone from "../../examples/hailstone.vox?raw";
-import factorial from "../../examples/factorial.vox?raw";
-import fibonacci from "../../examples/fibonacci.vox?raw";
-import natural from "../../examples/natural.vox?raw";
-import counting from "../../examples/counting.vox?raw";
-import playlist from "../../examples/playlist.vox?raw";
-import voice from "../../examples/voice.vox?raw";
-import wordplay from "../../examples/wordplay.vox?raw";
+import hailstone from "../../programs/examples/hailstone.vox?raw";
+import factorial from "../../programs/examples/factorial.vox?raw";
+import fibonacci from "../../programs/examples/fibonacci.vox?raw";
+import natural from "../../programs/examples/natural.vox?raw";
+import counting from "../../programs/examples/counting.vox?raw";
+import playlist from "../../programs/examples/playlist.vox?raw";
+import voice from "../../programs/examples/voice.vox?raw";
+import wordplay from "../../programs/examples/wordplay.vox?raw";
 
 export interface Example {
   id: string;

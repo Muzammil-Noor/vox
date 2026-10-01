@@ -1,0 +1,357 @@
+# Vox language notes
+
+A reference for the language itself: every operator, statement and builtin,
+with its precedence and its spoken alternative.
+
+The website's `/docs` page renders the same material with runnable examples and
+a link that opens each one in the playground. That version is generated from
+tested programs in `programs/snippets/`, so if the two ever disagree, the
+website is right.
+
+## Operators, statements and builtins
+
+### Operators, highest precedence first
+
+| Level | Operators                                                                                                              |
+| ----- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1     | `( )`                                                                                                                  |
+| 2     | `xs[i]` (an item of a list), `a.f(b)` (a dot call)                                                                     |
+| 3     | `as` (cast)                                                                                                            |
+| 4     | `squared`, `cubed`                                                                                                     |
+| 5     | spoken builtins (`square root of`, `length of`, ...), `Nth item of`, `pop`, `ask`                                      |
+| 6     | `^` `**` / `to the power of` / `raised to the power of` (right associative)                                            |
+| 7     | unary `-`                                                                                                              |
+| 8     | `not` / `!` / `~`                                                                                                      |
+| 9     | `*` `/` `%` / `multiplied by` / `times` / `divided by` / `remainder from`                                              |
+| 10    | `+` `-` / `added to` / `plus` / `minus`                                                                                |
+| 11    | `subtracted from`                                                                                                      |
+| 12    | predicates: `is even`, `is odd`, `is positive`, `is negative`, `is empty`, `is divisible by`, `is between ... and ...`, `is in`, `contains`, `starts with`, `ends with`, `from ... to ...` (slice), `split by`, `joined with` |
+| 13    | `<` `>` `<=` `>=` / `is less than` / `is greater than` / ...                                                           |
+| 14    | `==` `!=` / `is` / `is equal to` / `equals` / `equals to` / `is not`                                                   |
+| 15    | `&&` `&` / `and`                                                                                                       |
+| 16    | `\|\|` `\|` / `or`                                                                                                     |
+
+`a subtracted from b` evaluates to `b - a`. Prefix and postfix forms apply to
+the term next to them: `-x squared` is `-(x squared)`, `2 * x squared` is
+`2 * (x squared)` and `square root of x squared` is `sqrt(x squared)`.
+
+Multi-word operators and declaration starters may span newlines, so this is
+valid:
+
+```java
+if (total is greater
+    than 15) { ... }
+```
+
+### Assignment
+
+Assignment is `=`, `<-`, `which is equal to` or `which equals`. Reverse
+assignment is `->`.
+
+`<=` and `=>` are **comparisons only**. They previously doubled as assignment
+operators, which made the grammar ambiguous.
+
+### Declarations
+
+```java
+integer x;                                  // defaults to 0
+integer y <- 5;
+consider an integer z which is equal to 7;
+let there be a whole number w which equals 9;
+5 -> integer v;                             // reverse declaration
+```
+
+Defaults are `0` for `integer`, `0.0` for `float`, `false` for `boolean` and
+the empty string for `string` and `character`.
+
+A name cannot be declared again while one is visible - in the same block or an
+enclosing one - so no variable is ever shadowedand a local cannot reuse a
+parameter's name. Sibling blocks may reuse a name, since neither can see the
+other's.
+
+### input()
+
+`input()` reads one line and coerces it: digits become an `integer`,
+`12.5` becomes a `float`, `true`/`false` become a `boolean`, anything else
+stays a `string`. It is accepted wherever a value is expected.
+
+### print, say and newlines
+
+`print` writes exactly what you give it - **no newline is added**. Print
+`'\n'` where a line should end. `say` is the spoken line-form: it prints its
+arguments and then ends the line for you.
+
+```java
+print("loading");
+print(".", ".", ".", '\n');   // loading...
+print("a"); print("b");       // ab - still the same line
+say "done";                   // done, newline included
+```
+
+String literals take either quote style (`"\n"` or `'\n'`); escapes are `\n`,
+`\t`, `\r`, `\"`, `\'` and `\\`.
+
+`ask` prints its prompt (no newline, so the answer lands on the same line) and
+reads one line back, coerced exactly like `input()`:
+
+```java
+integer age <- ask "How old are you? ";
+let name be ask "Who is this? ";
+```
+
+`ask` applies to the term right after it; parenthesise a longer prompt:
+`ask ("Hello " + name + ", how old?")`.
+
+### Spoken assignment: set, let and swap
+
+`set total to 0;` is assignment, exactly as taught. `let x be 5;` declares a
+new variable and infers its type from the value (`let line be an input;` stays
+dynamic). `swap a and b;` exchanges two variables through a hidden temporary.
+
+```java
+let price be 12.5;            // float, inferred
+set the price to price * 2;
+swap price and limit;
+```
+
+`x is equal to 5;` on its own is a comparison, not an assignment; the compiler
+warns that it has no effect and points you at `set`.
+
+### Predicates
+
+Conditions can be spoken and `is not` negates every predicate:
+
+| Predicate                        | Meaning                |
+| -------------------------------- | ---------------------- |
+| `n is even`, `n is odd`          | parity, integers only  |
+| `x is positive`, `x is negative` | sign of any number     |
+| `n is divisible by k`            | `n % k == 0`           |
+| `x is between a and b`           | inclusive on both ends |
+| `s is empty`                     | the string is `""`     |
+
+```java
+if (year is divisible by 4 and year is not divisible by 100) { ... }
+if (guess is between 1 and 100) { ... }
+```
+
+### Repeat loops
+
+`repeat 5 times { ... }` runs a block a fixed number of times without naming a
+counter; the count is any integer expression, evaluated once.
+`repeat { ... } until (done)` runs the body at least once and stops when the
+condition becomes true. `stop;` and `skip;` work inside both.
+
+### Negation, casts and builtins
+
+Unary minus works on any number: `-x`, `-(a + b)`, `2 ^ -1`. It binds looser
+than `^`, so `-2 ^ 2` is `-4`.
+
+`value as type` converts explicitly and fails loudly when it cannot:
+
+```java
+integer n <- an input as integer;      // "42" -> 42; "abc" is a runtime error
+float half <- (7 as float) / 2;        // 3.5
+string label <- 5 as string + "!";     // "5!"
+```
+
+Builtin functions have a spoken and a symbolic form; a user-defined function
+with the same name takes precedence:
+
+| Spoken                             | Symbolic                       | Result                     |
+| ---------------------------------- | ------------------------------ | -------------------------- |
+| `square root of x`                 | `sqrt(x)`                      | float                      |
+| `absolute value of x`              | `abs(x)`                       | same type as `x`           |
+| `floor of x`, `ceiling of x`       | `floor(x)`, `ceiling(x)`       | integer                    |
+| -                                  | `round(x)`                     | integer                    |
+| -                                  | `min(a, b)`, `max(a, b)`       | float if either is a float |
+| `length of s`                      | `length(s)`                    | integer                    |
+| `uppercase of s`, `lowercase of s` | `uppercase(s)`, `lowercase(s)` | string                     |
+
+Spoken builtins apply to the term right after them: `length of s + 1` is
+`length(s) + 1`.
+
+### Control flow
+
+- `else if` chains, with `otherwise` as a synonym for `else`.
+- `stop;` (or `break;`) leaves the innermost loop; `skip;` (or `continue;`)
+  moves to its next iteration. Both are compile errors outside a loop.
+
+### In-place updates
+
+An update changes a variable where it stands. Updates are statements, not
+expressions: `i++` has no value, so `x <- i++` is a syntax error rather than a
+trap. Every spoken form lowers to the same single IR instruction as its
+symbolic twin.
+
+| Symbolic               | Spoken                                                                                                    |
+| ---------------------- | --------------------------------------------------------------------------------------------------------- |
+| `n++;` / `++n;`        | `increment n;`, `increment the n;`, `n is incremented;`                                                   |
+| `n--;` / `--n;`        | `decrement n;`, `decrement the n;`, `n is decremented;`                                                   |
+| `n += x;`              | `increase n by x;`, `add x to n;`, `x is added to n;`                                                     |
+| `n -= x;`              | `decrease n by x;`, `subtract x from n;`, `take x from n;`, `remove x from n;`, `x is subtracted from n;` |
+| `n *= x;`              | `multiply n by x;`                                                                                        |
+| `n /= x;`              | `divide n by x;`                                                                                          |
+| `n %= x;`              | -                                                                                                         |
+| `n ^= x;` / `n **= x;` | -                                                                                                         |
+| `n *= 2;`              | `double n;`, `n is doubled;`                                                                              |
+| `n /= 2;`              | `halve n;`, `n is halved;`                                                                                |
+
+`the` is optional after every verb (`add 3 to the total`). An update is
+type-checked exactly like the assignment it stands for: `s += "!"` concatenates
+when `s` is a string, `halve n` on an integer is integer division and
+`increment name` on a string is a compile error. The classic `for` loop takes
+an update as its third clause: `for (integer i <- 1; i <= 5; i++)`.
+
+The verbs, the range-loop words, the voice words and the list words (`add`,
+`double`, `to`, `from`, `by`, `the`, `step`, `until`, `say`, `ask`, `set`,
+`let`, `be`, `swap`, `repeat`, `even`, `odd`, `list`, `in`, `at`, `push`,
+`pop`, `insert`, `into`, `contains`, `lock`, `wrap`, `sort`, `reverse`,
+`shuffle`, `fixed`, `constant`, `always`, `starts`, `ends`, `with`,
+`places`, ...) are keywords, so they cannot name a variable or a function.
+The multi-word forms are single tokens, so `split`, `join`, `trim`, `random`
+and `seed` stay ordinary names: `split(s, " ")` and `s.split(" ")` are plain
+calls.
+
+### Range loops
+
+```java
+for i from 1 to 10 { ... }             // 1, 2, ..., 10
+for i from 0 until 10 { ... }          // 0, 1, ..., 9
+for i from 10 down to 1 { ... }        // 10, 9, ..., 1
+for i from 0 to 100 step 5 { ... }     // also: by 5, in steps of 5
+for float x from 0.0 to 1.0 step 0.25 { ... }
+```
+
+`to` is inclusive, `until` is exclusive and `down to` counts down. The loop
+variable is a fresh `integer` (or the type given) scoped to the loop. The
+start, end and step are evaluated once, before the first iteration, so
+reassigning the bound inside the body does not change how many times it runs.
+The step must be positive; to count down, say `down to`. Parentheses around the
+clause are optional.
+
+### Lists
+
+```java
+list<integer> a;                       // empty; also: integer[] a; integer a[];
+b is a list of integers;               // spoken
+integer zeros[3];                      // [0, 0, 0]
+let primes be [2, 3, 5];               // inferred: list of integer
+integer[][] grid <- [[1, 2], [3, 4]];  // lists nest
+
+say primes[0], " ", 1st item of primes;   // 2 2 - subscripts count from 0, ordinals from 1
+set the 2nd item of primes to 33;
+primes[0]++;
+
+push 7 to primes;                      // append; also push(primes, 7)
+push 1 to primes at 0;                 // before item 0; also insert 1 into primes at 0
+let last be pop primes;                // remove and return the last item; `pop primes at i` picks one
+say length of primes, " ", primes contains 33, " ", primes is empty;
+
+for each p in primes { say p; }        // also: for every p in primes; for (integer p : primes)
+```
+
+Lists are references: `ys <- xs` makes two names for one listand a function
+that receives a list works on the caller's list. `copy of xs` makes a separate
+one. `is` compares lists item by item. Indexes run from `0` to `length - 1`;
+anything else - including a negative index - is a runtime error, as is popping
+an empty list. Ordinals are checked: `2th item` is a compile error that tells
+you to write `2nd`. Inside `for each` the length is re-read every turn, so
+pushing to the list extends the loop.
+
+`sort xs;` and `reverse xs;` change a list in place; `sum of xs`, `largest of
+xs`, `smallest of xs` and `position of x in xs` (`-1` when absent) read it.
+Each also has a function form and a dot form: `sum(xs)`, `xs.sum()`.
+
+### Text
+
+A string is a sequence of charactersand the list vocabulary applies to it:
+
+```java
+string s <- "Hello, Vox";
+say s[0], " ", 1st character of s;     // H H - both count to the same place
+say length of s;                       // 10
+for each ch in s { print(ch, "."); }
+
+say s from 0 until 5;                  // Hello  (`to` includes the far end)
+say s contains "Vox", " ", s starts with "He", " ", s ends with "x";
+say position of "Vox" in s;            // 7, or -1 when absent
+
+say trim of "  padded  ";
+say reversed of "stressed";            // desserts
+say replace("banana", "na", "NA");
+string[] words <- "the quick fox" split by " ";
+say words joined with "+";             // the+quick+fox
+say characters of "hi";                // ["h", "i"]
+```
+
+Strings never change in place: `s[0] <- "z"` is a compile error, because
+every one of these returns a new string. `character` is a spelling of
+`string` - a one-character string is just a string.
+
+### Randomness
+
+```java
+seed random with 7;                    // omit this and every run differs
+say a random number between 1 and 6;   // both bounds included
+say a random item of words;
+shuffle deck;
+```
+
+The generator is a 32-bit xorshift written out in both engines, so a seeded
+program deals the same numbers in Java and in the browser - which is what lets
+a game have a regression test.
+
+### Rounding and stopping
+
+`x rounded to 2 places` gives a float rounded to that many decimals.
+`stop the program;` ends the run wherever it is, however deep inside a call.
+
+### Dot calls
+
+`a.f(b)` means exactly `f(a, b)`: the thing before the dot becomes the first
+argument. That one rule gives every list operation and builtin a method
+spellingand your own functions too:
+
+```java
+xs.push(5);                    // push(xs, 5)
+say s.length(), " ", xs.sum(); // length(s), sum(xs)
+say 21.twice();                // your own integer twice(integer n)
+say xs.copy().pop();           // calls chain left to right
+```
+
+Parentheses are always required. The spoken forms and the plain function
+forms remain; all three compile to the same instruction.
+
+### Locks, wrapping and constants
+
+`lock xs;` freezes a list's size: `push`, `insert` and `pop` are runtime errors
+until `unlock xs;`. Items stay writable. The lock belongs to the list, so every
+alias sees it. `fixed integer xs[5];` declares a list that is born lockedand
+`xs is locked` asks.
+
+`wrap xs;` makes indexes count around the ends: `xs[-1]` is the last item,
+`xs[length]` is the first againand ordinals follow (`5th item of` a 3-list is
+the 2nd). It applies to reads, writes, `pop at` and ordinals, never to
+`insert at`. `unwrap xs;` restores the strict rule; `xs is wrapping` asks.
+
+`constant integer MAX <- 3;` and `let NAME always be value;` declare names that
+cannot be assigned again - a compile error, not a runtime one. A constant list
+is a constant *name*; the list it refers to may still change.
+
+### Powers
+
+`x ^ y`, `x ** y`, `x to the power of y` and `x raised to the power of y` are
+the same operator. `x squared` and `x cubed` are postfix spellings of `x ^ 2`
+and `x ^ 3`.
+
+### Procedures
+
+A function that returns nothing is declared with `procedure`, `void` or
+`nothing`. It may `return;` early but cannot return a value and calling it
+where a value is expected is a compile error.
+
+```java
+procedure greet(string who) {
+    say "hello, ", who;
+}
+```

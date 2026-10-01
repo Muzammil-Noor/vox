@@ -1,28 +1,28 @@
-const sources = import.meta.glob("../../../docs/snippets/*.vox", {
+const sources = import.meta.glob("../../../programs/snippets/*.vox", {
   query: "?raw",
   import: "default",
   eager: true,
 }) as Record<string, string>;
 
-const outputs = import.meta.glob("../../../docs/snippets/*.out", {
+const outputs = import.meta.glob("../../../programs/snippets/*.out", {
   query: "?raw",
   import: "default",
   eager: true,
 }) as Record<string, string>;
 
-const errors = import.meta.glob("../../../docs/snippets/*.err", {
+const errors = import.meta.glob("../../../programs/snippets/*.err", {
   query: "?raw",
   import: "default",
   eager: true,
 }) as Record<string, string>;
 
-const irs = import.meta.glob("../../../docs/snippets/*.ir", {
+const irs = import.meta.glob("../../../programs/snippets/*.ir", {
   query: "?raw",
   import: "default",
   eager: true,
 }) as Record<string, string>;
 
-const stdins = import.meta.glob("../../../docs/snippets/*.in", {
+const stdins = import.meta.glob("../../../programs/snippets/*.in", {
   query: "?raw",
   import: "default",
   eager: true,
@@ -47,7 +47,7 @@ function pick(
   id: string,
   ext: string,
 ): string | undefined {
-  const value = map[`../../../docs/snippets/${id}.${ext}`];
+  const value = map[`../../../programs/snippets/${id}.${ext}`];
   return value === undefined
     ? undefined
     : value.replace(/\r\n/g, "\n").replace(/\n+$/, "");
@@ -57,7 +57,7 @@ export function getSnippet(id: string): Snippet {
   const source = pick(sources, id, "vox");
   if (source === undefined) {
     // A typo in the content file should be loud, not a silently empty box.
-    return { id, source: `// missing snippet: docs/snippets/${id}.vox` };
+    return { id, source: `// missing snippet: programs/snippets/${id}.vox` };
   }
   return {
     id,

@@ -29,7 +29,7 @@ const DEFAULT_STEP_LIMIT = 50_000_000;
 
 /**
  * Executes the IR produced by IRBuilder. Same instruction set and storage
- * model as the Java reference implementation (see src/IRExecutor.java), with
+ * model as the Java reference implementation (see engines/java/IRExecutor.java), with
  * one structural difference: instead of blocking on stdin, run() is resumable.
  * It returns 'need-input' when the program wants a line and continues after
  * provideInput() - which is what lets the same core run in a browser, where

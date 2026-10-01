@@ -23,7 +23,7 @@ for (let i = 0; i < args.length; i++) {
 
 if (out === null || inputs.length === 0) {
   console.error(
-    "usage: node tests/report.mjs --out FILE PLATFORM=FILE [PLATFORM=FILE ...]",
+    "usage: node scripts/report.mjs --out FILE PLATFORM=FILE [PLATFORM=FILE ...]",
   );
   process.exit(64);
 }

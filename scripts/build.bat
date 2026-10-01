@@ -3,9 +3,9 @@ REM Builds Vox: generates the parser from Vox.g4, compiles everything
 REM packages a self-contained runnable jar at build\vox.jar.
 
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
-set "ANTLR=tools\antlr-4.13.2-complete.jar"
+set "ANTLR=scripts\tools\antlr-4.13.2-complete.jar"
 
 if not exist "%ANTLR%" (
     echo build: missing %ANTLR% 1>&2
@@ -22,7 +22,7 @@ java -cp "%ANTLR%" org.antlr.v4.Tool -visitor -no-listener -o build\gen Vox.g4
 if errorlevel 1 exit /b 1
 
 echo ==^> compiling
-dir /s /b build\gen\*.java src\*.java > build\sources.txt
+dir /s /b build\gen\*.java engines\java\*.java > build\sources.txt
 javac -nowarn -d build\classes -cp "%ANTLR%" @build\sources.txt
 if errorlevel 1 exit /b 1
 
@@ -37,4 +37,4 @@ jar --create --file build\vox.jar --main-class VoxMain -C build\classes . -C bui
 if errorlevel 1 exit /b 1
 
 echo ==^> done: build\vox.jar
-echo     run with: vox examples\factorial.vox
+echo     run with: vox programs\examples\factorial.vox

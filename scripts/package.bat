@@ -8,12 +8,12 @@ REM
 REM Needs a JDK 14 or newer: jpackage and jlink ship with it.
 
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 set /p VERSION=<VERSION
 
 if not exist build\vox.jar (
-    call build.bat
+    call scripts\build.bat
     if errorlevel 1 exit /b 1
 )
 
@@ -26,7 +26,7 @@ copy /y build\vox.jar dist\stage\ >nul
 echo ==^> building dist\vox (jpackage)
 jpackage --type app-image --name vox --dest dist ^
     --input dist\stage --main-jar vox.jar --main-class VoxMain ^
-    --win-console --icon installer\vox.ico ^
+    --win-console --icon scripts\installer\vox.ico ^
     --app-version %VERSION% --vendor Vox ^
     --description "The Vox programming language" ^
     --add-modules java.base ^
@@ -49,7 +49,7 @@ if "%ISCC%"=="" (
     echo ==^> skipping installer: Inno Setup 6 not found ^(winget install JRSoftware.InnoSetup^)
 ) else (
     echo ==^> building installer ^(Inno Setup^)
-    "%ISCC%" /Q "/DAppVersion=%VERSION%" installer\vox.iss
+    "%ISCC%" /Q "/DAppVersion=%VERSION%" scripts\installer\vox.iss
     if errorlevel 1 exit /b 1
 )
 

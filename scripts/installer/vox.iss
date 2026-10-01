@@ -1,7 +1,7 @@
-; Inno Setup script for the Vox installer. package.bat compiles it and passes
-; the version in:   ISCC /DAppVersion=0.1.0 installer\vox.iss
+; Inno Setup script for the Vox installer. scripts\package.bat compiles it and passes
+; the version in:   ISCC /DAppVersion=0.1.0 scripts\installer\vox.iss
 ;
-; It ships the app image that jpackage wrote to ..\dist\vox (the vox.exe
+; It ships the app image that jpackage wrote to ..\..\dist\vox (the vox.exe
 ; launcher plus a trimmed Java runtime, so nothing else needs installing)
 ; and, when the task is ticked, puts that folder on the PATH.
 ;
@@ -23,8 +23,8 @@ AppPublisherURL=https://github.com/Muzammil-Noor/vox
 AppSupportURL=https://github.com/Muzammil-Noor/vox/issues
 DefaultDirName={autopf}\Vox
 DisableProgramGroupPage=yes
-LicenseFile=..\LICENSE
-OutputDir=..\dist
+LicenseFile=..\..\LICENSE
+OutputDir=..\..\dist
 OutputBaseFilename=vox-setup-{#AppVersion}
 SetupIconFile=vox.ico
 UninstallDisplayIcon={app}\vox.exe
@@ -41,7 +41,7 @@ ChangesEnvironment=yes
 Name: "addtopath"; Description: "Add Vox to the PATH, so ""vox file.vox"" works in any terminal"; GroupDescription: "Command line:"
 
 [Files]
-Source: "..\dist\vox\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+Source: "..\..\dist\vox\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
 [Messages]
 FinishedLabel=Vox is installed.%n%nOpen a new terminal and run:%n%n    vox file.vox%n%nTerminals that were already open do not see the new PATH until they are reopened.

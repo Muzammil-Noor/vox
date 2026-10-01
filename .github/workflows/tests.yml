@@ -47,13 +47,13 @@ jobs:
         run: npm ci
 
       - name: Build the Java engine
-        run: bash build.sh
+        run: bash scripts/build.sh
 
       - name: Build the TypeScript engine
-        run: npm run build -w core
+        run: npm run build -w @vox/core
 
       - name: Java engine
-        run: VOX_REPORT="java-${{ matrix.platform }}.tsv" bash tests/run.sh
+        run: VOX_REPORT="java-${{ matrix.platform }}.tsv" bash scripts/test.sh
 
       - name: Upload Java verdicts
         if: ${{ !cancelled() }}
@@ -64,10 +64,10 @@ jobs:
           if-no-files-found: ignore
 
       - name: TypeScript engine
-        run: VOX_CMD="node core/dist/cli.js" bash tests/run.sh
+        run: VOX_CMD="node engines/typescript/dist/cli.js" bash scripts/test.sh
 
       - name: Engine parity
-        run: bash tests/parity.sh
+        run: bash scripts/parity.sh
 
   web:
     name: Web build
@@ -93,7 +93,7 @@ jobs:
 
       - name: Type-check and build
         # web's prebuild builds core; build is `tsc --noEmit && vite build`.
-        run: npm run build -w web
+        run: npm run build -w @vox/web
 
   publish:
     name: Publish Java results
@@ -134,7 +134,7 @@ jobs:
             echo "ready=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          node tests/report.mjs --out latest.json \
+          node scripts/report.mjs --out latest.json \
             windows=verdicts/java-windows.tsv \
             linux=verdicts/java-linux.tsv
           echo "ready=true" >> "$GITHUB_OUTPUT"
