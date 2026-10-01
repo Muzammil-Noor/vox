@@ -33,6 +33,9 @@ export default function Nav() {
           <NavLink to="/tests" className={linkClass}>
             Tests
           </NavLink>
+          <NavLink to="/extend" className={linkClass}>
+            Extend
+          </NavLink>
           <a
             href={LINKS.journal}
             target="_blank"

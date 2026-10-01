@@ -95,6 +95,9 @@ jobs:
         # web's prebuild builds core; build is `tsc --noEmit && vite build`.
         run: npm run build -w @vox/web
 
+      - name: Walkthrough still matches the source
+        run: node scripts/check-walkthrough.mjs
+
   publish:
     name: Publish Java results
     needs: suite

@@ -72,6 +72,8 @@ read the one you care about.
 
 The grammar contains **no embedded code**. It describes syntax and nothing else, which is why the same file can generate a parser for two different languages.
 
+When you want to change something rather than read it, the website's `/extend` page is a step-by-step walkthrough of adding a feature: the seven edits, in order, with a way to check your work after each one. Every snippet on it is real code from this repository, and CI fails if that stops being true.
+
 ## How the pipeline fits together
 
 ```
@@ -85,7 +87,6 @@ Parser                     generated from Vox.g4       --emit-tree
    |
    |
    +--> SemanticAnalyzer   names and types             --emit-symbols
-   |
    |
    v
 IRBuilder                  tree -> instructions        --emit-ir

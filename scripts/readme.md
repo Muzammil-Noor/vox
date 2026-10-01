@@ -9,6 +9,7 @@ Everything here builds, tests or packages Vox. All of them can be run from the r
 | `parity.sh`               | Run both engines over everything and require identical output |
 | `package.sh` / `package.bat` | Build the standalone `dist/vox/`, a zip, and the installer |
 | `report.mjs`              | Turn test verdicts into the JSON the website's tests page reads |
+| `check-walkthrough.mjs`   | Confirm the website's "add a feature" page still shows real code |
 | `vox.bat`                 | Launcher for a source checkout, so `vox file.vox` works       |
 | `installer/`              | The Inno Setup script and icon for the Windows installer      |
 | `tools/`                  | The ANTLR jar, the one build dependency that is committed     |

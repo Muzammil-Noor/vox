@@ -6,6 +6,7 @@ import Landing from "./pages/Landing";
 import Playground from "./pages/Playground";
 import Docs from "./pages/Docs";
 import Tests from "./pages/Tests";
+import Extend from "./pages/Extend";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -15,6 +16,7 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/playground" element={<Playground />} />
         <Route path="/docs" element={<Docs />} />
         <Route path="/tests" element={<Tests />} />
+        <Route path="/extend" element={<Extend />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,
