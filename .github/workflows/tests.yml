@@ -149,11 +149,16 @@ jobs:
           # grows and never needs pulling into main.
           mkdir -p publish
           cp latest.json publish/
+          # Vercel watches every branch of this repo. This branch has no site
+          # in it, so without the flag below Vercel keeps trying to build a
+          # preview of it and failing. Written here as well as on main because
+          # the docs do not say which branch's config is consulted.
+          echo '{ "git": { "deploymentEnabled": false } }' > publish/vercel.json
           cd publish
           git init -q -b test-results
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add latest.json
+          git add latest.json vercel.json
           git commit -q -m "Java results for ${GITHUB_SHA:0:7}"
           git push -q --force \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \

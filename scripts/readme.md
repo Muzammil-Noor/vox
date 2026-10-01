@@ -31,6 +31,11 @@ VOX_CMD="dist/vox/vox.exe" ./scripts/test.sh                        # the packag
 Set `VOX_REPORT=file.tsv` and it also writes a verdict per program, which is
 what CI feeds to `report.mjs` to publish the Java results to the website.
 
+Those results are force-pushed to the `test-results` branch as `latest.json`,
+and the tests page fetches them from there. The branch holds no site, so it
+also carries a `vercel.json` turning deployment off, which stops Vercel trying
+to build a preview of it on every run.
+
 ## Where the output goes
 
 Both are ignored by git:
