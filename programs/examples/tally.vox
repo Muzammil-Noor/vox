@@ -1,0 +1,34 @@
+// Maps: counting thingsand looking them up by name.
+main {
+    string[] votes <- ["red", "blue", "red", "green", "red", "blue"];
+
+    // Count each colour. A key that is not there yet counts as zero.
+    map<string, integer> tally <- {};
+    for each vote in votes {
+        tally[vote] <- (tally[vote] otherwise 0) + 1;
+    }
+    say "votes: ", tally;
+
+    // Who won? Walk the keys and remember the best so far.
+    string winner <- "";
+    integer best <- 0;
+    for each colour in tally {
+        if (tally[colour] > best) {
+            best <- tally[colour];
+            winner <- colour;
+        }
+    }
+    say winner, " wins with ", best;
+
+    // A map is also a lookup table.
+    map<string, string> hex <- {
+        "red": "#ff0000",
+        "green": "#00ff00",
+        "blue": "#0000ff"
+    };
+    for each colour in tally {
+        say colour, " is ", hex[colour] otherwise "unknown";
+    }
+
+    say length of hex, " colours known, ", keys of hex;
+}

@@ -1,0 +1,4 @@
+main {
+    map<string, integer> m <- {};
+    say m["gone"];
+}

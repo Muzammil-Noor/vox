@@ -1,0 +1,16 @@
+main {
+    map<string, integer> ages <- {"ada": 36};
+
+    // reading a key that is not there stops the program,
+    // so say what to fall back to
+    say ages["ada"];
+    say ages["nobody"] otherwise 0;
+
+    // writing a key that is not there is how a map grows
+    ages["grace"] <- 45;
+    say ages contains "grace";
+    say "nobody" is in ages;
+
+    delete "ada" from ages;
+    say ages;
+}

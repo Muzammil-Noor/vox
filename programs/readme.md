@@ -1,15 +1,15 @@
 # Every Vox program in the repository
 
-There are 139 of them here and every one is checked on both engines, on Linux and on Windows, on every push. Between them they pin down everything the language does. A behaviour is not guaranteed if it is not represented by a program in this folder.
+There are 151 of them here and every one is checked on both engines, on Linux and on Windows, on every push. Between them they pin down everything the language does. A behaviour is not guaranteed if it is not represented by a program in this folder.
 
 They are sorted by what each one proves, not by topic.
 
 | Folder      | Count | What it has to do                                     |
 | ----------- | ----- | ----------------------------------------------------- |
-| `examples/` | 8     | run start to finish; these open in the playground     |
-| `snippets/` | 47    | print exactly this; the docs page shows them          |
-| `run/`      | 34    | print exactly this                                    |
-| `fail/`     | 50    | be rejected, with exactly this message                |
+| `examples/` | 9     | run start to finish; these open in the playground     |
+| `snippets/` | 50    | print exactly this; the docs page shows them          |
+| `run/`      | 35    | print exactly this                                    |
+| `fail/`     | 57    | be rejected, with exactly this message                |
 
 ## How each kind is checked
 

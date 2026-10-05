@@ -484,7 +484,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
             return itemTypeOf(indexed, base, writing);
         }
         VoxParser.OrdinalTargetContext ordinal = (VoxParser.OrdinalTargetContext) target;
-        checkOrdinal(ordinal ordinal.ORDINAL());
+        checkOrdinal(ordinal, ordinal.ORDINAL());
         return itemTypeOf(ordinal, typeOfTarget(ordinal.target(), false), writing);
     }
 

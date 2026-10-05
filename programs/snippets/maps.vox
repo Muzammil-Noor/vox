@@ -1,0 +1,10 @@
+main {
+    // three spellings, one meaning
+    map<string, integer> ages <- {"ada": 36, "alan": 41};
+    map of string to integer blank <- {};
+    scores is a map of string to integer;
+
+    say ages;
+    say length of ages;
+    say blank is empty;
+}

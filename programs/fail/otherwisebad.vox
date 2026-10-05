@@ -1,0 +1,4 @@
+main {
+    integer n <- 1;
+    say n otherwise 0;
+}

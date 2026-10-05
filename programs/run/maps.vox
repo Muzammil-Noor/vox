@@ -1,0 +1,57 @@
+// Maps: every way to make one, read it, change it and walk it.
+main {
+    // three ways to declare, one meaning
+    map<string, integer> ages <- {"ada": 36, "alan": 41};
+    map of string to integer blank <- {};
+    scores is a map of string to integer;
+
+    say ages;
+    say length of ages, " ", blank is empty;
+
+    // readingand reading a key that is not there
+    say ages["ada"];
+    say ages["nobody"] otherwise 0;
+
+    // writing a new key is how a map grows
+    ages["grace"] <- 45;
+    scores["ada"] <- 9;
+    say ages contains "grace", " ", "nobody" is in ages;
+
+    // keys and values come back in the order they were set
+    say keys of ages;
+    say values of ages;
+
+    delete "ada" from ages;
+    say ages;
+
+    for each name in ages {
+        say name, " is ", ages[name];
+    }
+
+    // counting, the thing maps are for
+    string[] words <- ["red", "blue", "red", "red"];
+    map<string, integer> counts <- {};
+    for each w in words {
+        counts[w] <- (counts[w] otherwise 0) + 1;
+    }
+    say counts;
+
+    // a map is a reference; copy of takes a snapshot
+    map<string, integer> same <- counts;
+    map<string, integer> snapshot <- copy of counts;
+    counts["red"] <- 99;
+    say same["red"], " ", snapshot["red"];
+
+    // keys can be any single valueand 1 and 1.0 are the same key
+    map<integer, string> byId <- {1: "one", 2: "two"};
+    say byId[1], " ", byId[2];
+    map<float, string> bySize <- {1.5: "small"};
+    bySize[2] <- "big";
+    say bySize[1.5], " ", bySize[2.0];
+    map<boolean, string> byFlag <- {true: "yes", false: "no"};
+    say byFlag[true];
+
+    // and values can be lists or maps
+    map<string, integer[]> marks <- {"ada": [9, 8]};
+    say marks["ada"][1];
+}
