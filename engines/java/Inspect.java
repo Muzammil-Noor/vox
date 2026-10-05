@@ -15,7 +15,7 @@ import org.antlr.v4.runtime.tree.TerminalNode;
  *                ->  IR          --emit-ir
  *                ->  output      --trace shows each instruction as it runs
  *
- * The TypeScript port has the same formatters in engines/typescript/src/inspect.ts, and
+ * The TypeScript port has the same formatters in engines/typescript/src/inspect.tsand
  * scripts/parity.sh compares the two, so these two files must produce identical
  * text for identical input.
  */
@@ -23,7 +23,7 @@ public final class Inspect {
 
     private Inspect() {}
 
-    /** One line per token: index, position, token type, and the text it matched. */
+    /** One line per token: index, position, token typeand the text it matched. */
     public static List<String> tokens(List<Token> tokens) {
         java.util.ArrayList<String> lines = new java.util.ArrayList<>();
         for (int i = 0; i < tokens.size(); i++) {

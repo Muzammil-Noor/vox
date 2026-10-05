@@ -18,6 +18,7 @@ import VoxParser, {
     SeedStmtContext, HaltStmtContext, PrintStatementContext,
     ReturnStatementContext, ParenExprContext, IndexExprContext,
     CastExprContext, BuiltinExprContext, OrdinalExprContext, PopExprContext,
+    MapExprContext, DefaultExprContext, DeleteStmtContext, DeclMapIsContext,
     AskExprContext, NegExprContext, SquaredExprContext, NotExprContext,
     PowExprContext, MulExprContext, AddExprContext, SubFromExprContext,
     PredicateExprContext, DivisibleExprContext, BetweenExprContext,
@@ -26,7 +27,7 @@ import VoxParser, {
     FloatExprContext, StringExprContext, BoolExprContext, ListExprContext,
     InputExprContext, CallExprContext, FunctionCallContext, ExpressionContext,
 } from './gen/VoxParser.js';
-import { BUILTINS, builtinNameOf, typeName, isList, elementOf } from './SemanticAnalyzer.js';
+import { BUILTINS, builtinNameOf, typeName, isList, isMap, elementOf } from './SemanticAnalyzer.js';
 
 /** Where `stop` and `skip` jump to inside the innermost loop. */
 interface LoopLabels {
@@ -35,7 +36,7 @@ interface LoopLabels {
 }
 
 /**
- * A resolved assignment target: a variable, or an item of a list whose base
+ * A resolved assignment target: a variable or an item of a list whose base
  * and index operands have already been evaluated.
  */
 type Place =
@@ -47,9 +48,16 @@ type Place =
  * runs. A direct port of the Java IRBuilder: both engines must emit identical
  * IR for the same source.
  *
- * Every expression visitor returns an operand: a literal, a variable name, or
+ * Every expression visitor returns an operand: a literal, a variable name or
  * the name of a freshly allocated temporary.
  */
+/** Looks through parentheses to the expression inside. */
+export function unwrapParens(ctx: ExpressionContext): ExpressionContext {
+    let inner = ctx;
+    while (inner instanceof ParenExprContext) inner = inner.expression();
+    return inner;
+}
+
 export class IRBuilder extends VoxVisitor<string | null> {
     readonly instructions: string[] = [];
     private tempCounter = 0;
@@ -152,6 +160,14 @@ export class IRBuilder extends VoxVisitor<string | null> {
         return null;
     };
 
+    /** `scores is a map of string to integer`. */
+    visitDeclMapIs = (ctx: DeclMapIsContext): null => {
+        const name = ctx.ID().getText();
+        if (ctx._init) this.emit(`set ${name} ${this.visit(ctx._init)}`);
+        else this.emit('map ' + name);
+        return null;
+    };
+
     // Constants are ordinary variables at run time; the checker guards them.
     visitDeclConstant = (ctx: DeclConstantContext): null => {
         this.emit(`set ${ctx.ID().getText()} ${this.visit(ctx.expression())}`);
@@ -166,6 +182,7 @@ export class IRBuilder extends VoxVisitor<string | null> {
     /** A variable declared without a value starts at its type's default. */
     private emitDefault(name: string, type: string): void {
         if (isList(type)) this.emit('list ' + name);
+        else if (isMap(type)) this.emit('map ' + name);
         else this.emit(`set ${name} ${defaultLiteral(type)}`);
     }
 
@@ -191,7 +208,7 @@ export class IRBuilder extends VoxVisitor<string | null> {
 
     /**
      * Evaluates a target down to somewhere a value can be read or written:
-     * a variable name, or a list operand plus an index operand. `2nd item of
+     * a variable name or a list operand plus an index operand. `2nd item of
      * xs` is xs with index 1.
      */
     private place(target: TargetContext): Place {
@@ -469,7 +486,7 @@ export class IRBuilder extends VoxVisitor<string | null> {
             this.visit(ctx._thenBlock);
             this.emit('goto ' + end);
             this.emit('label ' + elseLabel);
-            this.visit(otherwise); // a block, or the next `if` in the chain
+            this.visit(otherwise); // a block or the next `if` in the chain
             this.emit('label ' + end);
         }
         return null;
@@ -552,7 +569,11 @@ export class IRBuilder extends VoxVisitor<string | null> {
         const end = this.newLabel('endforeach');
         const cont = this.newLabel('foreachcont');
 
-        const list = this.frozen(ctx.expression());
+        // `iterable` hands back the list to walk: a list or string unchanged,
+        // a map's keys. It is what lets `for each` work on all three.
+        const source = this.frozen(ctx.expression());
+        const list = this.newTemp();
+        this.emit(`builtin ${list} iterable ${source}`);
         const index = this.newTemp();
         this.emit(`set ${index} 0`);
 
@@ -668,6 +689,37 @@ export class IRBuilder extends VoxVisitor<string | null> {
         const dest = this.newTemp();
         this.emit(`cast ${dest} ${value} ${typeName(ctx.datatype())}`);
         return dest;
+    };
+
+    /** `{"a": 1}`: an empty map, then one set per entry. */
+    visitMapExpr = (ctx: MapExprContext): string => {
+        const dest = this.newTemp();
+        this.emit(`map ${dest}`);
+        for (const entry of ctx.mapEntry_list()) {
+            const key = this.visit(entry._key)!;
+            const value = this.visit(entry._val)!;
+            this.emit(`list_set ${dest} ${key} ${value}`);
+        }
+        return dest;
+    };
+
+    /** `m[k] otherwise d`. The checker has already insisted the left is an index. */
+    visitDefaultExpr = (ctx: DefaultExprContext): string => {
+        const index = unwrapParens(ctx.expression(0)!) as IndexExprContext;
+        const base = this.visit(index.expression(0)!)!;
+        const key = this.visit(index.expression(1)!)!;
+        const fallback = this.visit(ctx.expression(1)!)!;
+        const dest = this.newTemp();
+        this.emit(`index_or ${dest} ${base} ${key} ${fallback}`);
+        return dest;
+    };
+
+    /** `delete "ada" from ages;` */
+    visitDeleteStmt = (ctx: DeleteStmtContext): string | null => {
+        const key = this.visit(ctx.expression(0)!)!;
+        const map = this.visit(ctx.expression(1)!)!;
+        this.emit(`builtin ${this.newTemp()} delete ${map} ${key}`);
+        return null;
     };
 
     visitBuiltinExpr = (ctx: BuiltinExprContext): string => {
@@ -828,7 +880,7 @@ export class IRBuilder extends VoxVisitor<string | null> {
     visitMethodCall = (ctx: MethodCallContext): string =>
         this.emitCall(ctx.methodName().getText(), ctx.expression_list().map(e => this.visit(e)!));
 
-    /** A call by name: a list operation, a builtin, or the user's own function. */
+    /** A call by name: a list operation, a builtin or the user's own function. */
     private emitCall(name: string, args: string[]): string {
         const dest = this.newTemp();
         if (name === 'push') {

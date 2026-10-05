@@ -3,7 +3,8 @@ import VoxVisitor from './gen/VoxVisitor.js';
 import {
     ProgramContext, PrototypeContext, DefinitionContext, MainFunctionContext,
     BlockContext, ParameterListContext, ReturnTypeContext, DatatypeContext,
-    ListTypeContext, DeclForwardContext, DeclReverseContext, DeclLetContext,
+    ListTypeContext, MapTypeContext, DeclForwardContext, DeclReverseContext, DeclLetContext,
+    MapExprContext, DefaultExprContext, DeleteStmtContext, DeclMapIsContext,
     DeclSizedContext, DeclListIsContext, DeclConstantContext,
     DeclConstantLetContext, AssignForwardContext,
     AssignReverseContext, SetToContext, SwapStmtContext, TargetContext,
@@ -50,10 +51,12 @@ interface Binding {
  *           list) | 'list' | 'sortable' (a list of scalars) | 'numlist' (a
  *           list of numbers) | 'item' (fits the first argument's item type)
  *   result: a fixed type, 'numeric' (float if any float), 'same' (the first
- *           argument's type), 'element' (its item type) or 'void'
+ *           argument's type), 'element' (its item type),
+ *           'keylist'/'valuelist' (a list of a map's keys or values) or 'void'
  */
 interface BuiltinSpec {
-    params: ('num' | 'whole' | 'string' | 'sized' | 'list' | 'sortable' | 'numlist' | 'item')[];
+    params: ('num' | 'whole' | 'string' | 'sized' | 'list' | 'sortable' | 'numlist' | 'item'
+             | 'map' | 'key')[];
     result: string;
 }
 
@@ -73,7 +76,11 @@ export const BUILTINS: ReadonlyMap<string, BuiltinSpec> = new Map<string, Builti
     ['length',    { params: ['sized'],      result: 'integer' }],
     ['uppercase', { params: ['string'],     result: 'string' }],
     ['lowercase', { params: ['string'],     result: 'string' }],
-    ['copy',      { params: ['list'],       result: 'same' }],
+    ['copy',      { params: ['sized'],      result: 'same' }],
+    // maps
+    ['keys',      { params: ['map'],         result: 'keylist' }],
+    ['values',    { params: ['map'],         result: 'valuelist' }],
+    ['delete',    { params: ['map', 'key'],  result: 'void' }],
     // list switches and their questions
     ['lock',      { params: ['list'],       result: 'void' }],
     ['unlock',    { params: ['list'],       result: 'void' }],
@@ -121,6 +128,8 @@ export function builtinNameOf(ctx: BuiltinNameContext): string {
     if (ctx.TRIM_OF()) return 'trim';
     if (ctx.REVERSED_OF()) return 'reversed';
     if (ctx.RANDOM_ITEM_OF()) return 'pick';
+    if (ctx.KEYS_OF()) return 'keys';
+    if (ctx.VALUES_OF()) return 'values';
     return 'lowercase';
 }
 
@@ -223,6 +232,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
      */
     private declareVariable(ctx: ParserRuleContext, name: string, type: string,
                             valueType: string | null, constant = false): void {
+        if (isMap(type)) this.checkKeyType(ctx, keyTypeOf(type));
         if (this.declaredHere(name)) {
             this.error(ctx, `variable '${name}' is already declared in this scope`);
         } else if (this.isVisible(name)) {
@@ -412,7 +422,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
     }
 
     /**
-     * The type a target holds: a variable's declared type, or a list's item
+     * The type a target holds: a variable's declared type or a list's item
      * type for `xs[i]` and `2nd item of xs`. Null once a problem is reported.
      * A constant cannot be the whole target, but its items may be (the name
      * is fixed, the list it refers to is not).
@@ -433,16 +443,22 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
         }
         if (target instanceof IndexTargetContext) {
             const base = this.typeOfTarget(target.target(), false);
-            this.requireIndex(target.expression(), this.visit(target.expression()));
+            const keyType = this.visit(target.expression());
+            if (base !== null && isMap(base)) {
+                // Setting a key that is not there yet is how a map grows.
+                this.checkKey(target.expression(), base, keyType);
+                return valueTypeOf(base);
+            }
+            this.requireIndex(target.expression(), keyType);
             return this.itemTypeOf(target, base, writing);
         }
         const ordinal = target as OrdinalTargetContext;
-        this.checkOrdinal(ordinal, ordinal.ORDINAL());
+        this.checkOrdinal(ordinal ordinal.ORDINAL());
         return this.itemTypeOf(ordinal, this.typeOfTarget(ordinal.target(), false), writing);
     }
 
     /**
-     * The item type behind an index: a list's item type, or a single-character
+     * The item type behind an index: a list's item type or a single-character
      * string when indexing text. Reports when the base has no items at all,
      * or when a string is being written to - strings cannot change in place.
      */
@@ -474,7 +490,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
         const text = token.getText();
         const n = Number(text.replace(/[a-z]+$/, ''));
         if (n === 0) {
-            this.error(ctx, 'there is no 0th item; the first is the 1st, or index 0');
+            this.error(ctx, 'there is no 0th item; the first is the 1st or index 0');
             return;
         }
         const want = ordinalSuffix(n);
@@ -645,7 +661,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
         return this.checkBuiltin(ctx, 'position', [listType, valueType]);
     };
 
-    /** `xs from a to b` / `s from a until b`: a fresh list, or a substring. */
+    /** `xs from a to b` / `s from a until b`: a fresh list or a substring. */
     visitSliceExpr = (ctx: SliceExprContext): string => {
         const base = this.visit(ctx.expression(0));
         this.requireIndex(ctx._low, this.visit(ctx._low));
@@ -698,9 +714,104 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
 
     visitIndexExpr = (ctx: IndexExprContext): string => {
         const base = this.visit(ctx.expression(0));
-        this.requireIndex(ctx.expression(1), this.visit(ctx.expression(1)));
+        const keyType = this.visit(ctx.expression(1));
+        if (base !== null && isMap(base)) {
+            this.checkKey(ctx.expression(1), base, keyType);
+            return valueTypeOf(base);
+        }
+        this.requireIndex(ctx.expression(1), keyType);
         return this.itemTypeOf(ctx, base) ?? 'error';
     };
+
+    /** `{"a": 1}`. An empty `{}` has no types yet and fits any map. */
+    visitMapExpr = (ctx: MapExprContext): string => {
+        const entries = ctx.mapEntry_list();
+        if (entries.length === 0) return mapOf('any', 'any');
+
+        let keyType: string | null = null;
+        let valueType: string | null = null;
+        for (const entry of entries) {
+            const k = this.visit(entry._key);
+            const v = this.visit(entry._val);
+            if (keyType === null) {
+                if (!this.checkKeyType(entry._key, k ?? 'any')) return 'error';
+                keyType = k ?? 'any';
+                valueType = v ?? 'any';
+                continue;
+            }
+            if (fits(keyType, k ?? 'any') !== 'ok') {
+                keyType = this.widen(keyType, k ?? 'any', entry._key, 'keys');
+            }
+            if (fits(valueType!, v ?? 'any') !== 'ok') {
+                valueType = this.widen(valueType!, v ?? 'any', entry._val, 'values');
+            }
+        }
+        return mapOf(keyType!, valueType!);
+    };
+
+    /** Two entries disagree: take the wider type if there is one, else complain. */
+    private widen(soFar: string, other: string, ctx: ParserRuleContext, what: string): string {
+        if (fits(other, soFar) === 'ok') return other;
+        this.error(ctx, `the ${what} of this map are not all the same type: ${soFar} and ${other}`);
+        return 'any';
+    }
+
+    /** `m[k] otherwise d`: the value at k or d when k is absent. */
+    visitDefaultExpr = (ctx: DefaultExprContext): string => {
+        let left: ExpressionContext = ctx.expression(0);
+        while (left instanceof ParenExprContext) left = left.expression();
+        if (!(left instanceof IndexExprContext)) {
+            this.error(ctx, "'otherwise' needs something indexed on its left, like m[k] otherwise 0");
+            this.visit(ctx.expression(1));
+            return 'error';
+        }
+        const type = this.visit(ctx.expression(0));
+        const fallback = this.visit(ctx.expression(1));
+        if (type !== null && type !== 'error') {
+            this.checkAssignable(ctx.expression(1), type, fallback, 'the fallback');
+        }
+        return type ?? 'error';
+    };
+
+    /** `delete "ada" from ages;` */
+    visitDeleteStmt = (ctx: DeleteStmtContext): null => {
+        const keyType = this.visit(ctx.expression(0));
+        const mapType = this.visit(ctx.expression(1));
+        if (mapType !== null && isMap(mapType)) {
+            this.checkKey(ctx.expression(0), mapType, keyType);
+        } else if (mapType !== null && mapType !== 'error' && mapType !== 'any') {
+            this.error(ctx.expression(1), `delete needs a map but got ${mapType}`);
+        }
+        return null;
+    };
+
+    /** `scores is a map of string to integer`. */
+    visitDeclMapIs = (ctx: DeclMapIsContext): null => {
+        const keyType = typeName(ctx._key);
+        this.checkKeyType(ctx._key, keyType);
+        const type = mapOf(keyType, typeName(ctx._val));
+        const valueType = ctx._init === undefined ? null : this.visit(ctx._init);
+        this.declareVariable(ctx, ctx.ID().getText(), type, valueType);
+        return null;
+    };
+
+    /** The key offered to a map has to suit the key type it was declared with. */
+    private checkKey(ctx: ParserRuleContext, mapType: string, got: string | null): void {
+        if (got === null || got === 'error' || got === 'any') return;
+        const want = keyTypeOf(mapType);
+        if (fits(want, got) !== 'ok') {
+            this.error(ctx, `this map has ${want} keys but got ${got}`);
+        }
+    }
+
+    /** Keys have to be single values: a list or a map cannot be one. */
+    private checkKeyType(ctx: ParserRuleContext, keyType: string): boolean {
+        if (isList(keyType) || isMap(keyType)) {
+            this.error(ctx, `a map key must be a single value, but ${keyType} is not`);
+            return false;
+        }
+        return true;
+    }
 
     visitOrdinalExpr = (ctx: OrdinalExprContext): string => {
         this.checkOrdinal(ctx, ctx.ORDINAL());
@@ -744,6 +855,11 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
     private checkContains(ctx: ParserRuleContext, op: string,
                           listType: string | null, valueType: string | null): void {
         if (listType === null || listType === 'error' || listType === 'any') return;
+        if (isMap(listType)) {
+            // On a map, `contains` asks whether a key is there.
+            this.checkKey(ctx, listType, valueType);
+            return;
+        }
         if (listType === 'string') {
             // In text, `contains` looks for a substring.
             if (valueType !== null && valueType !== 'error' && valueType !== 'any'
@@ -836,10 +952,12 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
         if (listType !== null && listType !== 'error' && listType !== 'any') {
             if (isList(listType)) {
                 element = elementOf(listType);
+            } else if (isMap(listType)) {
+                element = keyTypeOf(listType); // the keys, in the order they were set
             } else if (listType === 'string') {
                 element = 'string'; // one character at a time
             } else {
-                this.error(ctx.expression(), `for each needs a list or a string but got ${listType}`);
+                this.error(ctx.expression(), `for each needs a list, a string or a map but got ${listType}`);
             }
         }
 
@@ -1003,7 +1121,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
         if (t !== null && t !== 'error' && t !== 'any') {
             const pred = ctx._pred.type;
             const ok = pred === VoxParser.EMPTY
-                ? t === 'string' || t === 'character' || isList(t)
+                ? t === 'string' || t === 'character' || isList(t) || isMap(t)
                 : pred === VoxParser.LOCKED || pred === VoxParser.WRAPPING
                     ? isList(t)
                     : pred === VoxParser.EVEN || pred === VoxParser.ODD
@@ -1048,7 +1166,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
             ctx._op.text!, false);
 
     private comparison(ctx: ParserRuleContext, l: string | null,
-                       r: string | null, op: string, ordered: boolean): string {
+                       r: string | null, op: string ordered: boolean): string {
         if (l === 'error' || r === 'error') return 'error';
         if (l === 'any' || r === 'any') return 'boolean';
         const ok = l !== null && r !== null
@@ -1124,7 +1242,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
         return t;
     };
 
-    /** A call by name, however it was spelled: user function, builtin, or list operation. */
+    /** A call by name, however it was spelled: user function, builtin or list operation. */
     private checkCall(ctx: ParserRuleContext, name: string, args: ExpressionContext[],
                       argTypes: (string | null)[]): string {
         if (name === 'push' || name === 'insert' || name === 'pop') {
@@ -1192,6 +1310,12 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
                     return first === null || first === undefined || first === 'error' ? 'any' : first;
                 case 'element':
                     return first !== null && first !== undefined && isList(first) ? elementOf(first) : 'any';
+                case 'keylist':
+                    return first !== null && first !== undefined && isMap(first)
+                        ? listOf(keyTypeOf(first)) : listOf('any');
+                case 'valuelist':
+                    return first !== null && first !== undefined && isMap(first)
+                        ? listOf(valueTypeOf(first)) : listOf('any');
                 case 'numeric':
                     if (argTypes.some(t => t === 'float')) return 'float';
                     if (argTypes.some(t => t === 'any')) return 'any';
@@ -1216,7 +1340,17 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
                 case 'whole':  ok = got === 'integer'; want = 'a whole number'; break;
                 case 'string': ok = got === 'string' || got === 'character'; want = 'string'; break;
                 case 'list':   ok = isList(got); want = 'a list'; break;
-                case 'sized':  ok = got === 'string' || got === 'character' || isList(got); want = 'a string or a list'; break;
+                case 'sized':  ok = got === 'string' || got === 'character' || isList(got) || isMap(got);
+                               want = 'a string, a list or a map'; break;
+                case 'map':    ok = isMap(got); want = 'a map'; break;
+                case 'key': {
+                    const mapType = argTypes[0];
+                    const wanted = mapType !== null && mapType !== undefined && isMap(mapType)
+                        ? keyTypeOf(mapType) : 'any';
+                    ok = fits(wanted, got) === 'ok';
+                    want = wanted;
+                    break;
+                }
                 case 'sortable':
                     ok = isList(got) && !isList(elementOf(got));
                     want = 'a list of numbers or strings';
@@ -1296,15 +1430,40 @@ export function elementOf(listType: string): string {
 /**
  * Whether a value of type `value` may be stored where `target` is expected:
  * 'ok', 'narrow' (float into integer - legal with a warning) or 'no'. Lists
- * must match item for item; only 'any' (an empty literal, or input) is a
+ * must match item for item; only 'any' (an empty literal or input) is a
  * wildcard.
  */
+export function isMap(t: string | null): boolean {
+    return t !== null && t.startsWith('map of ');
+}
+
+export function mapOf(key: string, value: string): string {
+    return `map of ${key} to ${value}`;
+}
+
+/** The key type of `map of K to V`. Keys are scalars, so the first " to " splits it. */
+export function keyTypeOf(mapType: string): string {
+    const rest = mapType.slice('map of '.length);
+    const at = rest.indexOf(' to ');
+    return at < 0 ? 'any' : rest.slice(0, at);
+}
+
+export function valueTypeOf(mapType: string): string {
+    const rest = mapType.slice('map of '.length);
+    const at = rest.indexOf(' to ');
+    return at < 0 ? 'any' : rest.slice(at + 4);
+}
+
 export function fits(target: string, value: string): 'ok' | 'narrow' | 'no' {
     if (value === 'error') return 'ok'; // already reported elsewhere
     if (target === value) return 'ok';
     if (target === 'any' || value === 'any') return 'ok';
     if (isList(target) && isList(value)) {
         return fits(elementOf(target), elementOf(value)) === 'ok' ? 'ok' : 'no';
+    }
+    if (isMap(target) && isMap(value)) {
+        return fits(keyTypeOf(target), keyTypeOf(value)) === 'ok'
+            && fits(valueTypeOf(target), valueTypeOf(value)) === 'ok' ? 'ok' : 'no';
     }
     if (isNumeric(target) && isNumeric(value)) {
         return target === 'integer' && value === 'float' ? 'narrow' : 'ok';
@@ -1350,9 +1509,10 @@ function returnTypeOf(ctx: ReturnTypeContext): string {
     return ctx.VOID() ? 'void' : typeName(ctx.datatype());
 }
 
-/** The type a `datatype` node spells: a scalar, or `list of <type>`. */
+/** The type a `datatype` node spells: a scalar or `list of <type>`. */
 export function typeName(ctx: DatatypeContext): string {
     if (ctx instanceof ListTypeContext) return listOf(typeName(ctx.datatype()));
+    if (ctx instanceof MapTypeContext) return mapOf(typeName(ctx._key), typeName(ctx._val));
     return canonical(ctx.getText());
 }
 

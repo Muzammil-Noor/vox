@@ -59,7 +59,7 @@ begin
   end;
 end;
 
-{ 1-based position of Dir as a whole ;-separated entry of Path, or 0. }
+{ 1-based position of Dir as a whole ;-separated entry of Path or 0. }
 function PathEntryPos(const Path, Dir: String): Integer;
 begin
   Result := Pos(';' + Uppercase(Dir) + ';', ';' + Uppercase(Path) + ';');

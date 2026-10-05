@@ -1,7 +1,7 @@
 import {
     VoxValue, VoxList, VoxRuntimeError, display, truthy, arithmetic, compare, coerceInput,
     negate, cast, builtin, defaultValue, asList, checkIndex, describe,
-    itemAt, sliceOf, sequenceHas,
+    itemAt, sliceOf, sequenceHas, VoxMap, isMap, mapKey, itemOrDefault,
 } from './values.js';
 
 export { VoxRuntimeError };
@@ -55,7 +55,7 @@ const DEFAULT_STEP_LIMIT = 50_000_000;
  *   list_set <list> <index> <value>
  *   list_push <list> <value>
  *   list_insert <list> <index> <value>
- *   list_pop <dest> <list> [index]    removes (and yields) the last item, or item <index>
+ *   list_pop <dest> <list> [index]    removes (and yields) the last item or item <index>
  *   list_has <dest> <list> <value>    also substring search, when <list> is a string
  *   slice <dest> <seq> <from> <to>    a fresh list or substring; <to> is exclusive
  *   halt                              ends the program, whatever the call depth
@@ -109,7 +109,7 @@ export class IRExecutor {
     }
 
     /**
-     * Runs until the program finishes, needs input, or (when given) the
+     * Runs until the program finishes, needs input or (when given) the
      * per-call step budget is spent. Throws VoxRuntimeError on program errors.
      */
     run(budget?: number): RunStatus {
@@ -254,6 +254,22 @@ export class IRExecutor {
 
                 // ---- lists ----------------------------------------------
 
+                case 'map': {
+                    this.require(toks, 2, raw);
+                    this.frame().locals.set(toks[1], new VoxMap());
+                    this.pc++;
+                    break;
+                }
+
+                // `m[k] otherwise d`: the value at k or d when k is absent.
+                case 'index_or': {
+                    this.require(toks, 5, raw);
+                    this.frame().locals.set(toks[1], itemOrDefault(
+                        this.resolve(toks[2]), this.resolve(toks[3]), this.resolve(toks[4])));
+                    this.pc++;
+                    break;
+                }
+
                 case 'list': {
                     this.require(toks, 2, raw);
                     const items: VoxValue[] = [];
@@ -290,6 +306,12 @@ export class IRExecutor {
                 case 'list_set': {
                     this.require(toks, 4, raw);
                     const target = this.resolve(toks[1]);
+                    if (isMap(target)) {
+                        const k = this.resolve(toks[2]);
+                        target.entries.set(mapKey(k), { key: k, value: this.resolve(toks[3]) });
+                        this.pc++;
+                        break;
+                    }
                     if (typeof target === 'string') {
                         throw new VoxRuntimeError(
                             'a string cannot be changed in place; build a new one instead');

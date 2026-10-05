@@ -21,7 +21,7 @@ public class IRBuilder extends VoxBaseVisitor<String> {
     }
 
     /**
-     * A resolved assignment target: a variable (name set), or an item of a
+     * A resolved assignment target: a variable (name set) or an item of a
      * list whose base and index operands have already been evaluated.
      */
     private static final class Place {
@@ -148,6 +148,15 @@ public class IRBuilder extends VoxBaseVisitor<String> {
         return null;
     }
 
+    /** `scores is a map of string to integer`. */
+    @Override
+    public String visitDeclMapIs(VoxParser.DeclMapIsContext ctx) {
+        String name = ctx.ID().getText();
+        if (ctx.init != null) emit("set " + name + " " + visit(ctx.init));
+        else emit("map " + name);
+        return null;
+    }
+
     // Constants are ordinary variables at run time; the checker guards them.
     @Override
     public String visitDeclConstant(VoxParser.DeclConstantContext ctx) {
@@ -164,6 +173,7 @@ public class IRBuilder extends VoxBaseVisitor<String> {
     /** A variable declared without a value starts at its type's default. */
     private void emitDefault(String name, String type) {
         if (SemanticAnalyzer.isList(type)) emit("list " + name);
+        else if (SemanticAnalyzer.isMap(type)) emit("map " + name);
         else emit("set " + name + " " + defaultLiteral(type));
     }
 
@@ -211,7 +221,7 @@ public class IRBuilder extends VoxBaseVisitor<String> {
 
     /**
      * Evaluates a target down to somewhere a value can be read or written:
-     * a variable name, or a list operand plus an index operand. `2nd item of
+     * a variable name or a list operand plus an index operand. `2nd item of
      * xs` is xs with index 1.
      */
     private Place place(VoxParser.TargetContext target) {
@@ -647,7 +657,11 @@ public class IRBuilder extends VoxBaseVisitor<String> {
         String end = newLabel("endforeach");
         String cont = newLabel("foreachcont");
 
-        String list = frozen(ctx.expression());
+        // `iterable` hands back the list to walk: a list or string unchanged,
+        // a map's keys. It is what lets `for each` work on all three.
+        String source = frozen(ctx.expression());
+        String list = newTemp();
+        emit("builtin " + list + " iterable " + source);
         String index = newTemp();
         emit("set " + index + " 0");
 
@@ -774,6 +788,49 @@ public class IRBuilder extends VoxBaseVisitor<String> {
         String dest = newTemp();
         emit("cast " + dest + " " + value + " " + SemanticAnalyzer.typeName(ctx.datatype()));
         return dest;
+    }
+
+    /** `{"a": 1}`: an empty map, then one set per entry. */
+    @Override
+    public String visitMapExpr(VoxParser.MapExprContext ctx) {
+        String dest = newTemp();
+        emit("map " + dest);
+        for (VoxParser.MapEntryContext entry : ctx.mapEntry()) {
+            String key = visit(entry.key);
+            String value = visit(entry.val);
+            emit("list_set " + dest + " " + key + " " + value);
+        }
+        return dest;
+    }
+
+    /** `m[k] otherwise d`. The checker has already insisted the left is an index. */
+    @Override
+    public String visitDefaultExpr(VoxParser.DefaultExprContext ctx) {
+        VoxParser.IndexExprContext index =
+                (VoxParser.IndexExprContext) unwrap(ctx.expression(0));
+        String base = visit(index.expression(0));
+        String key = visit(index.expression(1));
+        String fallback = visit(ctx.expression(1));
+        String dest = newTemp();
+        emit("index_or " + dest + " " + base + " " + key + " " + fallback);
+        return dest;
+    }
+
+    /** `delete "ada" from ages;` */
+    @Override
+    public String visitDeleteStmt(VoxParser.DeleteStmtContext ctx) {
+        String key = visit(ctx.expression(0));
+        String map = visit(ctx.expression(1));
+        emit("builtin " + newTemp() + " delete " + map + " " + key);
+        return null;
+    }
+
+    /** Looks through parentheses to the expression inside. */
+    static VoxParser.ExpressionContext unwrap(VoxParser.ExpressionContext ctx) {
+        while (ctx instanceof VoxParser.ParenExprContext) {
+            ctx = ((VoxParser.ParenExprContext) ctx).expression();
+        }
+        return ctx;
     }
 
     @Override
@@ -971,7 +1028,7 @@ public class IRBuilder extends VoxBaseVisitor<String> {
         return emitCall(ctx.methodName().getText(), args);
     }
 
-    /** A call by name: a list operation, a builtin, or the user's own function. */
+    /** A call by name: a list operation, a builtin or the user's own function. */
     private String emitCall(String name, List<String> args) {
         String dest = newTemp();
         if (name.equals("push")) {

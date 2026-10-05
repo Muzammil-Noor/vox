@@ -11,7 +11,7 @@
  *   VoxList -> Vox list      (a reference: two names may share one list)
  *   null    -> unset
  */
-export type VoxValue = bigint | number | boolean | string | VoxList | null;
+export type VoxValue = bigint | number | boolean | string | VoxList | VoxMap | null;
 
 /**
  * A list, with the two switches a program can flip on it: `lock` freezes its
@@ -21,6 +21,44 @@ export class VoxList {
     locked = false;
     wrapping = false;
     constructor(public items: VoxValue[] = []) {}
+}
+
+/**
+ * A map, in the order its keys were first set. Insertion order is part of the
+ * language: iterating a map has to give the same answer every run or no
+ * program using one could be tested.
+ *
+ * Keys are held under a canonical string so that key identity matches `==`.
+ * Vox says `1 == 1.0` is true, so they have to be the same key too. Like
+ * lists, maps are references.
+ */
+export class VoxMap {
+    readonly entries = new Map<string, { key: VoxValue; value: VoxValue }>();
+}
+
+export function isMap(v: VoxValue): v is VoxMap {
+    return v instanceof VoxMap;
+}
+
+/** Beyond this a float cannot hold every whole number, so stop collapsing. */
+const WHOLE_LIMIT = 9007199254740992;
+
+/**
+ * The canonical form of a key. Two values Vox considers equal must produce the
+ * same string, which is why a whole-valued float collapses onto the integer
+ * spelling.
+ */
+export function mapKey(key: VoxValue): string {
+    if (typeof key === 'boolean') return 'b' + key;
+    if (typeof key === 'string') return 's' + key;
+    if (typeof key === 'bigint') return 'n' + key.toString();
+    if (typeof key === 'number') {
+        if (Number.isFinite(key) && Number.isInteger(key) && Math.abs(key) <= WHOLE_LIMIT) {
+            return 'n' + BigInt(key).toString();
+        }
+        return 'f' + formatFloat(key);
+    }
+    throw new VoxRuntimeError('cannot use ' + describe(key) + ' as a map key');
 }
 
 /** Raised for anything the program does wrong at run time. */
@@ -100,6 +138,13 @@ export function display(v: VoxValue): string {
     if (v === null) return 'null';
     if (typeof v === 'bigint') return v.toString();
     if (typeof v === 'number') return formatFloat(v);
+    if (isMap(v)) {
+        const parts = [...v.entries.values()].map(e =>
+            (typeof e.key === 'string' ? quote(e.key) : display(e.key))
+            + ': '
+            + (typeof e.value === 'string' ? quote(e.value) : display(e.value)));
+        return '{' + parts.join(', ') + '}';
+    }
     if (isList(v)) {
         return '[' + v.items.map(item => typeof item === 'string' ? quote(item) : display(item)).join(', ') + ']';
     }
@@ -112,6 +157,7 @@ export function truthy(v: VoxValue): boolean {
     if (typeof v === 'bigint') return v !== 0n;
     if (typeof v === 'number') return v !== 0;
     if (isList(v)) return v.items.length > 0;
+    if (isMap(v)) return v.entries.size > 0;
     return v.length > 0;
 }
 
@@ -121,6 +167,7 @@ export function describe(v: VoxValue): string {
     if (typeof v === 'number') return 'float ' + formatFloat(v);
     if (typeof v === 'boolean') return 'boolean ' + v;
     if (isList(v)) return 'list ' + display(v);
+    if (isMap(v)) return 'map ' + display(v);
     return 'string "' + v + '"';
 }
 
@@ -149,7 +196,7 @@ export function arithmetic(op: string, left: VoxValue, right: VoxValue): VoxValu
             }
             return (left as bigint) ** (right as bigint);
         }
-        // A float operand, or a negative exponent, makes the result a float.
+        // A float operand or a negative exponent, makes the result a float.
         const result = Math.pow(Number(left), Number(right));
         if (Number.isNaN(result)) {
             throw new VoxRuntimeError(
@@ -303,6 +350,15 @@ export function defaultValue(irType: string): VoxValue {
     }
 }
 
+export function keysOf(m: VoxMap): VoxList {
+    return new VoxList([...m.entries.values()].map(e => e.key));
+}
+
+function asMap(v: VoxValue, name: string): VoxMap {
+    if (isMap(v)) return v;
+    throw new VoxRuntimeError(`'${name}' needs a map but got ${describe(v)}`);
+}
+
 export function asList(v: VoxValue): VoxList {
     if (isList(v)) return v;
     throw new VoxRuntimeError(`cannot use ${describe(v)} as a list`);
@@ -334,12 +390,21 @@ export function checkIndex(index: VoxValue, length: number, wrapping: boolean,
 /** How many items or characters a value has, for the operations that take both. */
 export function sequenceLength(v: VoxValue): number {
     if (isList(v)) return v.items.length;
+    if (isMap(v)) return v.entries.size;
     if (typeof v === 'string') return v.length;
     throw new VoxRuntimeError(`cannot index ${describe(v)}; only lists and strings have items`);
 }
 
-/** One item of a list, or one character of a string, as a value. */
+/** One item of a list or one character of a string, as a value. */
 export function itemAt(seq: VoxValue, index: VoxValue): VoxValue {
+    if (isMap(seq)) {
+        const found = seq.entries.get(mapKey(index));
+        if (found === undefined) {
+            throw new VoxRuntimeError(`no key ${describe(index)} in the map`
+                + '; use `otherwise` to give a value for missing keys');
+        }
+        return found.value;
+    }
     if (typeof seq === 'string') {
         return seq[checkIndex(index, seq.length, false, false, 'a string')];
     }
@@ -347,7 +412,22 @@ export function itemAt(seq: VoxValue, index: VoxValue): VoxValue {
     return list.items[checkIndex(index, list.items.length, list.wrapping, false)];
 }
 
-/** `xs from a until b`: a fresh list, or a substring. The end is exclusive. */
+/** `m[k] otherwise d`: the value at k or d when there is nothing there. */
+export function itemOrDefault(base: VoxValue, key: VoxValue, fallback: VoxValue): VoxValue {
+    if (isMap(base)) {
+        const found = base.entries.get(mapKey(key));
+        return found === undefined ? fallback : found.value;
+    }
+    // On a list or a string it covers an index that is out of range.
+    const length = sequenceLength(base);
+    if (typeof key !== 'bigint') {
+        throw new VoxRuntimeError(`index must be an integer but got ${describe(key)}`);
+    }
+    if (key < 0n || key >= BigInt(length)) return fallback;
+    return itemAt(base, key);
+}
+
+/** `xs from a until b`: a fresh list or a substring. The end is exclusive. */
 export function sliceOf(seq: VoxValue, from: VoxValue, to: VoxValue): VoxValue {
     const isText = typeof seq === 'string';
     const length = sequenceLength(seq);
@@ -360,8 +440,11 @@ export function sliceOf(seq: VoxValue, from: VoxValue, to: VoxValue): VoxValue {
     return isText ? (seq as string).slice(start, end) : new VoxList(asList(seq).items.slice(start, end));
 }
 
-/** Whether a list holds a value, or a string holds a substring. */
+/** Whether a list holds a value or a string holds a substring. */
 export function sequenceHas(seq: VoxValue, wanted: VoxValue): boolean {
+    // On a map, `contains` asks about keys. That is what you want to know
+    // before reading one.
+    if (isMap(seq)) return seq.entries.has(mapKey(wanted));
     if (typeof seq === 'string') {
         if (typeof wanted !== 'string') {
             throw new VoxRuntimeError(`a string can only contain text, but got ${describe(wanted)}`);
@@ -453,12 +536,41 @@ export function builtin(name: string, args: VoxValue[]): VoxValue {
             arity(1);
             const v = args[0];
             if (isList(v)) return BigInt(v.items.length);
+            if (isMap(v)) return BigInt(v.entries.size);
             if (typeof v === 'string') return BigInt(v.length);
             throw new VoxRuntimeError(`'length' needs a string or a list but got ${describe(v)}`);
         }
+
+        // ---- maps -----------------------------------------------------------
+        // What `for each` walks. A map gives up its keys; everything else is
+        // already walkable by index.
+        case 'iterable': {
+            arity(1);
+            const v = args[0];
+            return isMap(v) ? keysOf(v) : v;
+        }
+        case 'keys':   arity(1); return keysOf(asMap(args[0], 'keys'));
+        case 'values': {
+            arity(1);
+            return new VoxList([...asMap(args[0], 'values').entries.values()].map(e => e.value));
+        }
+        case 'delete': {
+            arity(2);
+            asMap(args[0], 'delete').entries.delete(mapKey(args[1]));
+            return null;
+        }
         case 'uppercase': arity(1); return str(args[0]).toUpperCase();
         case 'lowercase': arity(1); return str(args[0]).toLowerCase();
-        case 'copy':      arity(1); return new VoxList([...list(args[0]).items]); // one level deep
+        case 'copy': {
+            arity(1);
+            const v = args[0];
+            if (isMap(v)) {
+                const copy = new VoxMap();
+                for (const [k, entry] of v.entries) copy.entries.set(k, { ...entry });
+                return copy;
+            }
+            return new VoxList([...list(args[0]).items]); // one level deep
+        }
 
         // ---- list switches ------------------------------------------------
         case 'lock':     arity(1); list(args[0]).locked = true; return null;

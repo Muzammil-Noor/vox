@@ -13,7 +13,7 @@ main {
     say e;
     say f, " ", names, " ", ratios;
 
-    // Reading: subscripts are 0-based, ordinals count from one.
+    // Reading: subscripts are 0-based ordinals count from one.
     say f[0], " ", f[2];
     say 1st item of f, " ", 3rd value of f;
     say 2nd item of names;

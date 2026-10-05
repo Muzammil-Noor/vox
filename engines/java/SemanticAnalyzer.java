@@ -45,7 +45,9 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
      *           list) | "list" | "sortable" (a list of scalars) | "numlist" (a
      *           list of numbers) | "item" (fits the first argument's item type)
      *   result: a fixed type, "numeric" (float if any float), "same" (the
-     *           first argument's type), "element" (its item type) or "void"
+     *           first argument's type), "element" (its item type),
+     *           "keylist"/"valuelist" (a list of a map's keys or values)
+     *           or "void"
      */
     static final class BuiltinSpec {
         final String[] params;
@@ -73,7 +75,11 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
         BUILTINS.put("length",    new BuiltinSpec("integer", "sized"));
         BUILTINS.put("uppercase", new BuiltinSpec("string",  "string"));
         BUILTINS.put("lowercase", new BuiltinSpec("string",  "string"));
-        BUILTINS.put("copy",      new BuiltinSpec("same",    "list"));
+        BUILTINS.put("copy",      new BuiltinSpec("same",    "sized"));
+        // maps
+        BUILTINS.put("keys",      new BuiltinSpec("keylist",   "map"));
+        BUILTINS.put("values",    new BuiltinSpec("valuelist", "map"));
+        BUILTINS.put("delete",    new BuiltinSpec("void",      "map", "key"));
         // list switches and their questions
         BUILTINS.put("lock",      new BuiltinSpec("void",    "list"));
         BUILTINS.put("unlock",    new BuiltinSpec("void",    "list"));
@@ -121,6 +127,8 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
         if (ctx.TRIM_OF() != null) return "trim";
         if (ctx.REVERSED_OF() != null) return "reversed";
         if (ctx.RANDOM_ITEM_OF() != null) return "pick";
+        if (ctx.KEYS_OF() != null) return "keys";
+        if (ctx.VALUES_OF() != null) return "values";
         return "lowercase";
     }
 
@@ -221,6 +229,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
      */
     private void declareVariable(ParserRuleContext ctx, String name, String type,
                                  String valueType, boolean constant) {
+        if (isMap(type)) checkKeyType(ctx, keyTypeOf(type));
         if (declaredHere(name)) {
             error(ctx, "variable '" + name + "' is already declared in this scope");
         } else if (isVisible(name)) {
@@ -443,7 +452,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
     }
 
     /**
-     * The type a target holds: a variable's declared type, or a list's item
+     * The type a target holds: a variable's declared type or a list's item
      * type for `xs[i]` and `2nd item of xs`. Null once a problem is reported.
      * A constant cannot be the whole target, but its items may be (the name
      * is fixed, the list it refers to is not).
@@ -465,11 +474,17 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
         if (target instanceof VoxParser.IndexTargetContext) {
             VoxParser.IndexTargetContext indexed = (VoxParser.IndexTargetContext) target;
             String base = typeOfTarget(indexed.target(), false);
-            requireIndex(indexed.expression(), visit(indexed.expression()));
+            String keyType = visit(indexed.expression());
+            if (isMap(base)) {
+                // Setting a key that is not there yet is how a map grows.
+                checkKey(indexed.expression(), base, keyType);
+                return valueTypeOf(base);
+            }
+            requireIndex(indexed.expression(), keyType);
             return itemTypeOf(indexed, base, writing);
         }
         VoxParser.OrdinalTargetContext ordinal = (VoxParser.OrdinalTargetContext) target;
-        checkOrdinal(ordinal, ordinal.ORDINAL());
+        checkOrdinal(ordinal ordinal.ORDINAL());
         return itemTypeOf(ordinal, typeOfTarget(ordinal.target(), false), writing);
     }
 
@@ -478,8 +493,8 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
     }
 
     /**
-     * The item type behind an index: a list's item type, or a single-character
-     * string when indexing text. Reports when the base has no items at all, or
+     * The item type behind an index: a list's item type or a single-character
+     * string when indexing text. Reports when the base has no items at all or
      * when a string is being written to - strings cannot change in place.
      */
     private String itemTypeOf(ParserRuleContext ctx, String base, boolean writing) {
@@ -509,7 +524,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
         String text = token.getText();
         int n = Integer.parseInt(text.replaceAll("[a-z]+$", ""));
         if (n == 0) {
-            error(ctx, "there is no 0th item; the first is the 1st, or index 0");
+            error(ctx, "there is no 0th item; the first is the 1st or index 0");
             return;
         }
         String want = ordinalSuffix(n);
@@ -719,7 +734,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
         return new ArrayList<>(Arrays.asList(types));
     }
 
-    /** `xs from a to b` / `s from a until b`: a fresh list, or a substring. */
+    /** `xs from a to b` / `s from a until b`: a fresh list or a substring. */
     @Override
     public String visitSliceExpr(VoxParser.SliceExprContext ctx) {
         String base = visit(ctx.expression(0));
@@ -789,9 +804,89 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
     @Override
     public String visitIndexExpr(VoxParser.IndexExprContext ctx) {
         String base = visit(ctx.expression(0));
-        requireIndex(ctx.expression(1), visit(ctx.expression(1)));
+        String keyType = visit(ctx.expression(1));
+        if (isMap(base)) {
+            checkKey(ctx.expression(1), base, keyType);
+            return valueTypeOf(base);
+        }
+        requireIndex(ctx.expression(1), keyType);
         String t = itemTypeOf(ctx, base);
         return t == null ? "error" : t;
+    }
+
+    /** `{"a": 1}`. An empty `{}` has no types yet and fits any map. */
+    @Override
+    public String visitMapExpr(VoxParser.MapExprContext ctx) {
+        if (ctx.mapEntry().isEmpty()) return mapOf("any", "any");
+
+        String keyType = null;
+        String valueType = null;
+        for (VoxParser.MapEntryContext entry : ctx.mapEntry()) {
+            String k = visit(entry.key);
+            String v = visit(entry.val);
+            if (keyType == null) {
+                if (!checkKeyType(entry.key, k)) return "error";
+                keyType = k;
+                valueType = v;
+                continue;
+            }
+            if (!"ok".equals(fits(keyType, k))) {
+                keyType = widen(keyType, k, entry.key, "keys");
+            }
+            if (!"ok".equals(fits(valueType, v))) {
+                valueType = widen(valueType, v, entry.val, "values");
+            }
+        }
+        return mapOf(keyType, valueType);
+    }
+
+    /** Two entries disagree: take the wider type if there is one, else complain. */
+    private String widen(String soFar, String other, ParserRuleContext ctx, String what) {
+        if ("ok".equals(fits(other, soFar))) return other;
+        error(ctx, "the " + what + " of this map are not all the same type: "
+                + soFar + " and " + other);
+        return "any";
+    }
+
+    /** `m[k] otherwise d`: the value at k or d when k is absent. */
+    @Override
+    public String visitDefaultExpr(VoxParser.DefaultExprContext ctx) {
+        VoxParser.ExpressionContext left = IRBuilder.unwrap(ctx.expression(0));
+        if (!(left instanceof VoxParser.IndexExprContext)) {
+            error(ctx, "'otherwise' needs something indexed on its left, like m[k] otherwise 0");
+            visit(ctx.expression(1));
+            return "error";
+        }
+        String type = visit(ctx.expression(0));
+        String fallback = visit(ctx.expression(1));
+        if (!"error".equals(type)) {
+            checkAssignable(ctx.expression(1), type, fallback, "the fallback");
+        }
+        return type;
+    }
+
+    /** `delete "ada" from ages;` */
+    @Override
+    public String visitDeleteStmt(VoxParser.DeleteStmtContext ctx) {
+        String keyType = visit(ctx.expression(0));
+        String mapType = visit(ctx.expression(1));
+        if (isMap(mapType)) {
+            checkKey(ctx.expression(0), mapType, keyType);
+        } else if (!"error".equals(mapType) && !"any".equals(mapType)) {
+            error(ctx.expression(1), "delete needs a map but got " + mapType);
+        }
+        return null;
+    }
+
+    /** `scores is a map of string to integer`. */
+    @Override
+    public String visitDeclMapIs(VoxParser.DeclMapIsContext ctx) {
+        String keyType = typeName(ctx.key);
+        checkKeyType(ctx.key, keyType);
+        String type = mapOf(keyType, typeName(ctx.val));
+        String valueType = ctx.init == null ? null : visit(ctx.init);
+        declareVariable(ctx, ctx.ID().getText(), type, valueType);
+        return null;
     }
 
     @Override
@@ -840,6 +935,11 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
 
     private void checkContains(ParserRuleContext ctx, String op, String listType, String valueType) {
         if (listType == null || "error".equals(listType) || "any".equals(listType)) return;
+        if (isMap(listType)) {
+            // On a map, `contains` asks whether a key is there.
+            checkKey(ctx, listType, valueType);
+            return;
+        }
         if ("string".equals(listType)) {
             // In text, `contains` looks for a substring.
             if (valueType != null && !"error".equals(valueType) && !"any".equals(valueType)
@@ -937,10 +1037,12 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
         if (listType != null && !"error".equals(listType) && !"any".equals(listType)) {
             if (isList(listType)) {
                 element = elementOf(listType);
+            } else if (isMap(listType)) {
+                element = keyTypeOf(listType); // the keys, in the order they were set
             } else if ("string".equals(listType)) {
                 element = "string"; // one character at a time
             } else {
-                error(ctx.expression(), "for each needs a list or a string but got " + listType);
+                error(ctx.expression(), "for each needs a list, a string or a map but got " + listType);
             }
         }
 
@@ -1145,7 +1247,7 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
             int pred = ctx.pred.getType();
             boolean ok;
             if (pred == VoxParser.EMPTY) {
-                ok = "string".equals(t) || "character".equals(t) || isList(t);
+                ok = "string".equals(t) || "character".equals(t) || isList(t) || isMap(t);
             } else if (pred == VoxParser.LOCKED || pred == VoxParser.WRAPPING) {
                 ok = isList(t);
             } else if (pred == VoxParser.EVEN || pred == VoxParser.ODD) {
@@ -1355,6 +1457,10 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
             result = (first == null || "error".equals(first)) ? "any" : first;
         } else if ("element".equals(result)) {
             result = (first != null && isList(first)) ? elementOf(first) : "any";
+        } else if ("keylist".equals(result)) {
+            result = (first != null && isMap(first)) ? listOf(keyTypeOf(first)) : listOf("any");
+        } else if ("valuelist".equals(result)) {
+            result = (first != null && isMap(first)) ? listOf(valueTypeOf(first)) : listOf("any");
         } else if ("numeric".equals(result)) {
             result = "integer";
             if (argTypes.contains("float")) result = "float";
@@ -1376,8 +1482,17 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
                 case "whole":  ok = "integer".equals(got); want = "a whole number"; break;
                 case "string": ok = "string".equals(got) || "character".equals(got); want = "string"; break;
                 case "list":   ok = isList(got); want = "a list"; break;
-                case "sized":  ok = "string".equals(got) || "character".equals(got) || isList(got);
-                               want = "a string or a list"; break;
+                case "sized":  ok = "string".equals(got) || "character".equals(got)
+                                    || isList(got) || isMap(got);
+                               want = "a string, a list or a map"; break;
+                case "map":    ok = isMap(got); want = "a map"; break;
+                case "key": {
+                    String mapType = argTypes.get(0);
+                    String wanted = isMap(mapType) ? keyTypeOf(mapType) : "any";
+                    ok = "ok".equals(fits(wanted, got));
+                    want = wanted;
+                    break;
+                }
                 case "sortable":
                     ok = isList(got) && !isList(elementOf(got));
                     want = "a list of numbers or strings";
@@ -1453,15 +1568,36 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
     /**
      * Whether a value of type `value` may be stored where `target` is
      * expected: "ok", "narrow" (float into integer - legal with a warning) or
-     * "no". Lists must match item for item; only "any" (an empty literal, or
+     * "no". Lists must match item for item; only "any" (an empty literal or
      * input) is a wildcard.
      */
+    static boolean isMap(String t) { return t != null && t.startsWith("map of "); }
+
+    static String mapOf(String key, String value) { return "map of " + key + " to " + value; }
+
+    /** The key type of `map of K to V`. Keys are scalars, so the first " to " splits it. */
+    static String keyTypeOf(String mapType) {
+        String rest = mapType.substring("map of ".length());
+        int at = rest.indexOf(" to ");
+        return at < 0 ? "any" : rest.substring(0, at);
+    }
+
+    static String valueTypeOf(String mapType) {
+        String rest = mapType.substring("map of ".length());
+        int at = rest.indexOf(" to ");
+        return at < 0 ? "any" : rest.substring(at + 4);
+    }
+
     static String fits(String target, String value) {
         if ("error".equals(value)) return "ok"; // already reported elsewhere
         if (target.equals(value)) return "ok";
         if ("any".equals(target) || "any".equals(value)) return "ok";
         if (isList(target) && isList(value)) {
             return "ok".equals(fits(elementOf(target), elementOf(value))) ? "ok" : "no";
+        }
+        if (isMap(target) && isMap(value)) {
+            return "ok".equals(fits(keyTypeOf(target), keyTypeOf(value)))
+                && "ok".equals(fits(valueTypeOf(target), valueTypeOf(value))) ? "ok" : "no";
         }
         if (isNumeric(target) && isNumeric(value)) {
             return "integer".equals(target) && "float".equals(value) ? "narrow" : "ok";
@@ -1481,12 +1617,34 @@ public class SemanticAnalyzer extends VoxBaseVisitor<String> {
         }
     }
 
-    /** The type a `datatype` node spells: a scalar, or `list of <type>`. */
+    /** The type a `datatype` node spells: a scalar or `list of <type>`. */
     static String typeName(VoxParser.DatatypeContext ctx) {
         if (ctx instanceof VoxParser.ListTypeContext) {
             return listOf(typeName(((VoxParser.ListTypeContext) ctx).datatype()));
         }
+        if (ctx instanceof VoxParser.MapTypeContext) {
+            VoxParser.MapTypeContext m = (VoxParser.MapTypeContext) ctx;
+            return mapOf(typeName(m.key), typeName(m.val));
+        }
         return canonical(ctx.getText());
+    }
+
+    /** The key offered to a map has to suit the key type it was declared with. */
+    private void checkKey(ParserRuleContext ctx, String mapType, String got) {
+        if (got == null || "error".equals(got) || "any".equals(got)) return;
+        String want = keyTypeOf(mapType);
+        if (!"ok".equals(fits(want, got))) {
+            error(ctx, "this map has " + want + " keys but got " + got);
+        }
+    }
+
+    /** Keys have to be single values: a list or a map cannot be one. */
+    private boolean checkKeyType(ParserRuleContext ctx, String keyType) {
+        if (isList(keyType) || isMap(keyType)) {
+            error(ctx, "a map key must be a single value, but " + keyType + " is not");
+            return false;
+        }
+        return true;
     }
 
     /** Maps every spelling of a scalar type onto one canonical name. */

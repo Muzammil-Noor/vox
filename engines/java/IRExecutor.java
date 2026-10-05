@@ -24,7 +24,7 @@ import java.util.*;
  *   list_set <list> <index> <value>
  *   list_push <list> <value>
  *   list_insert <list> <index> <value>
- *   list_pop <dest> <list> [index]    removes (and yields) the last item, or item <index>
+ *   list_pop <dest> <list> [index]    removes (and yields) the last item or item <index>
  *   list_has <dest> <list> <value>    also substring search, when <list> is a string
  *   slice <dest> <seq> <from> <to>    a fresh list or substring; <to> is exclusive
  *   halt                              ends the program, whatever the call depth
@@ -89,6 +89,52 @@ public class IRExecutor {
         boolean locked = false;
         boolean wrapping = false;
         VoxList(List<Object> items) { this.items = items; }
+    }
+
+    /**
+     * A map, in the order its keys were first set. Insertion order is part of
+     * the language: iterating a map has to give the same answer every run or
+     * no program using one could be tested.
+     *
+     * Keys are held under a canonical string so that key identity matches `==`.
+     * Vox says `1 == 1.0` is true, so they have to be the same key too.
+     * Like lists, maps are references.
+     */
+    static final class VoxMap {
+        static final class Pair {
+            final Object key;
+            Object value;
+            Pair(Object key, Object value) { this.key = key; this.value = value; }
+        }
+        final LinkedHashMap<String, Pair> entries = new LinkedHashMap<>();
+    }
+
+    /** Beyond this a double cannot hold every whole number, so stop collapsing. */
+    private static final double WHOLE_LIMIT = 9007199254740992.0;
+
+    /**
+     * The canonical form of a key. Two values that Vox considers equal must
+     * produce the same string, which is why a whole-valued float collapses
+     * onto the integer spelling.
+     */
+    static String mapKey(Object key) {
+        if (key instanceof Boolean) return "b" + key;
+        if (key instanceof String)  return "s" + key;
+        if (key instanceof Integer) return "n" + key;
+        if (key instanceof Double) {
+            double d = (Double) key;
+            if (!Double.isNaN(d) && !Double.isInfinite(d)
+                    && d == Math.rint(d) && Math.abs(d) <= WHOLE_LIMIT) {
+                return "n" + (long) d;
+            }
+            return "f" + d;
+        }
+        throw new VoxRuntimeError("cannot use " + describe(key) + " as a map key");
+    }
+
+    private static VoxMap asMap(Object o) {
+        if (o instanceof VoxMap) return (VoxMap) o;
+        throw new VoxRuntimeError("expected a map but got " + describe(o));
     }
 
     /** One activation record. Locals are private to this frame. */
@@ -264,6 +310,24 @@ public class IRExecutor {
                     break;
                 }
 
+                case "map": {
+                    require(toks, 2, raw);
+                    frame().locals.put(toks[1], new VoxMap());
+                    pc++;
+                    break;
+                }
+
+                // `m[k] otherwise d`: the value at k or d when k is absent.
+                case "index_or": {
+                    require(toks, 5, raw);
+                    Object base = resolve(toks[2]);
+                    Object key = resolve(toks[3]);
+                    Object fallback = resolve(toks[4]);
+                    frame().locals.put(toks[1], itemOrDefault(base, key, fallback));
+                    pc++;
+                    break;
+                }
+
                 case "list_fill": {
                     require(toks, 4, raw);
                     Object count = resolve(toks[2]);
@@ -282,7 +346,7 @@ public class IRExecutor {
                 case "list_get": {
                     require(toks, 4, raw);
                     // Also indexes a string, which is how `s[i]` and
-                    // `for each ch in s` are executed.
+                    // `for each ch in s` are executedand looks up a map key.
                     frame().locals.put(toks[1], itemAt(resolve(toks[2]), resolve(toks[3])));
                     pc++;
                     break;
@@ -291,6 +355,12 @@ public class IRExecutor {
                 case "list_set": {
                     require(toks, 4, raw);
                     Object target = resolve(toks[1]);
+                    if (target instanceof VoxMap) {
+                        Object k = resolve(toks[2]);
+                        asMap(target).entries.put(mapKey(k), new VoxMap.Pair(k, resolve(toks[3])));
+                        pc++;
+                        break;
+                    }
                     if (target instanceof String) {
                         throw new VoxRuntimeError(
                                 "a string cannot be changed in place; build a new one instead");
@@ -501,6 +571,18 @@ public class IRExecutor {
 
     private static String display(Object o) {
         if (o == null) return "null";
+        if (o instanceof VoxMap) {
+            StringBuilder sb = new StringBuilder("{");
+            boolean first = true;
+            for (VoxMap.Pair pair : ((VoxMap) o).entries.values()) {
+                if (!first) sb.append(", ");
+                first = false;
+                sb.append(pair.key instanceof String ? quote((String) pair.key) : display(pair.key));
+                sb.append(": ");
+                sb.append(pair.value instanceof String ? quote((String) pair.value) : display(pair.value));
+            }
+            return sb.append('}').toString();
+        }
         if (o instanceof VoxList) {
             StringBuilder sb = new StringBuilder("[");
             boolean first = true;
@@ -526,6 +608,7 @@ public class IRExecutor {
         if (o instanceof Double)  return (Double) o != 0.0;
         if (o instanceof String)  return !((String) o).isEmpty();
         if (o instanceof VoxList) return !((VoxList) o).items.isEmpty();
+        if (o instanceof VoxMap)  return !((VoxMap) o).entries.isEmpty();
         return true;
     }
 
@@ -574,13 +657,22 @@ public class IRExecutor {
     /** How many items or characters a value has, for the operations that take both. */
     private static int sequenceLength(Object v) {
         if (v instanceof VoxList) return ((VoxList) v).items.size();
+        if (v instanceof VoxMap)  return ((VoxMap) v).entries.size();
         if (v instanceof String) return ((String) v).length();
         throw new VoxRuntimeError("cannot index " + describe(v)
                 + "; only lists and strings have items");
     }
 
-    /** One item of a list, or one character of a string, as a value. */
+    /** One item of a list or one character of a string, as a value. */
     private static Object itemAt(Object seq, Object index) {
+        if (seq instanceof VoxMap) {
+            VoxMap.Pair found = ((VoxMap) seq).entries.get(mapKey(index));
+            if (found == null) {
+                throw new VoxRuntimeError("no key " + describe(index) + " in the map"
+                        + "; use `otherwise` to give a value for missing keys");
+            }
+            return found.value;
+        }
         if (seq instanceof String) {
             String s = (String) seq;
             return String.valueOf(s.charAt(checkIndex(index, s.length(), false, false, "a string")));
@@ -589,7 +681,23 @@ public class IRExecutor {
         return list.items.get(checkIndex(index, list.items.size(), list.wrapping, false, "a list"));
     }
 
-    /** `xs from a until b`: a fresh list, or a substring. The end is exclusive. */
+    /** `m[k] otherwise d`: the value at k or d when there is nothing there. */
+    private static Object itemOrDefault(Object base, Object key, Object fallback) {
+        if (base instanceof VoxMap) {
+            VoxMap.Pair found = ((VoxMap) base).entries.get(mapKey(key));
+            return found == null ? fallback : found.value;
+        }
+        // On a list or a string it covers an index that is out of range.
+        int length = sequenceLength(base);
+        if (!(key instanceof Integer)) {
+            throw new VoxRuntimeError("index must be an integer but got " + describe(key));
+        }
+        int i = (Integer) key;
+        if (i < 0 || i >= length) return fallback;
+        return itemAt(base, key);
+    }
+
+    /** `xs from a until b`: a fresh list or a substring. The end is exclusive. */
     private static Object sliceOf(Object seq, Object from, Object to) {
         boolean isText = seq instanceof String;
         int length = sequenceLength(seq);
@@ -603,8 +711,11 @@ public class IRExecutor {
         return new VoxList(new ArrayList<>(asList(seq).items.subList(start, end)));
     }
 
-    /** Whether a list holds a value, or a string holds a substring. */
+    /** Whether a list holds a value or a string holds a substring. */
     private static boolean sequenceHas(Object seq, Object wanted) {
+        // On a map, `contains` asks about keys. That is what you want to know
+        // before reading one.
+        if (seq instanceof VoxMap) return ((VoxMap) seq).entries.containsKey(mapKey(wanted));
         if (seq instanceof String) {
             if (!(wanted instanceof String)) {
                 throw new VoxRuntimeError("a string can only contain text, but got " + describe(wanted));
@@ -858,12 +969,46 @@ public class IRExecutor {
                 arity(name, args, 1);
                 Object v = args.get(0);
                 if (v instanceof VoxList) return ((VoxList) v).items.size();
+                if (v instanceof VoxMap)  return ((VoxMap) v).entries.size();
                 if (v instanceof String) return ((String) v).length();
                 throw new VoxRuntimeError("'length' needs a string or a list but got " + describe(v));
             }
+
+            // ---- maps -----------------------------------------------------------
+            // What `for each` walks. A map gives up its keys; everything else is
+            // already walkable by index.
+            case "iterable": {
+                arity(name, args, 1);
+                Object v = args.get(0);
+                return v instanceof VoxMap ? keysOf((VoxMap) v) : v;
+            }
+            case "keys": {
+                arity(name, args, 1);
+                return keysOf(map(name, args.get(0)));
+            }
+            case "values": {
+                arity(name, args, 1);
+                List<Object> out = new ArrayList<>();
+                for (VoxMap.Pair pair : map(name, args.get(0)).entries.values()) out.add(pair.value);
+                return new VoxList(out);
+            }
+            case "delete": {
+                arity(name, args, 2);
+                map(name, args.get(0)).entries.remove(mapKey(args.get(1)));
+                return null;
+            }
             case "uppercase": arity(name, args, 1); return str(name, args.get(0)).toUpperCase(Locale.ROOT);
             case "lowercase": arity(name, args, 1); return str(name, args.get(0)).toLowerCase(Locale.ROOT);
-            case "copy":      arity(name, args, 1); return new VoxList(new ArrayList<>(list(name, args.get(0)).items)); // one level deep
+            case "copy": {
+                arity(name, args, 1);
+                Object v = args.get(0);
+                if (v instanceof VoxMap) {
+                    VoxMap copy = new VoxMap();
+                    copy.entries.putAll(((VoxMap) v).entries);
+                    return copy;
+                }
+                return new VoxList(new ArrayList<>(list(name, args.get(0)).items)); // one level deep
+            }
 
             // ---- list switches ------------------------------------------------
             case "lock":     arity(name, args, 1); list(name, args.get(0)).locked = true; return null;
@@ -1040,12 +1185,26 @@ public class IRExecutor {
         return (VoxList) v;
     }
 
+    private static VoxList keysOf(VoxMap m) {
+        List<Object> out = new ArrayList<>();
+        for (VoxMap.Pair pair : m.entries.values()) out.add(pair.key);
+        return new VoxList(out);
+    }
+
+    private static VoxMap map(String name, Object v) {
+        if (!(v instanceof VoxMap)) {
+            throw new VoxRuntimeError("'" + name + "' needs a map but got " + describe(v));
+        }
+        return (VoxMap) v;
+    }
+
     private static String describe(Object o) {
         if (o == null) return "an unset value";
         if (o instanceof Integer) return "integer " + o;
         if (o instanceof Double)  return "float " + o;
         if (o instanceof Boolean) return "boolean " + o;
         if (o instanceof VoxList) return "list " + display(o);
+        if (o instanceof VoxMap)  return "map " + display(o);
         return "string \"" + o + "\"";
     }
 }

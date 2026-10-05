@@ -12,12 +12,12 @@ import VoxLexer from "./gen/VoxLexer.js";
  *                ->  IR          --emit-ir
  *                ->  output      --trace shows each instruction as it runs
  *
- * The Java engine has the same formatters in engines/java/Inspect.java, and
+ * The Java engine has the same formatters in engines/java/Inspect.javaand
  * scripts/parity.sh compares the two, so these two files must produce identical
  * text for identical input.
  */
 
-/** One line per token: index, position, token type, and the text it matched. */
+/** One line per token: index, position, token typeand the text it matched. */
 export function formatTokens(tokens: Token[]): string[] {
     return tokens.map((t, i) => {
         const where = `${t.line}:${t.column}`;

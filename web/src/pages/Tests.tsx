@@ -189,7 +189,7 @@ export default function Tests() {
         <h2 className="mt-6 text-3xl font-bold text-paper">Vox Test Suite</h2>
 
         <p className="mt-3 max-w-3xl text-fog">
-          Vox has two engines, and a feature is not finished until both pass
+          Vox has two enginesand a feature is not finished until both pass
           every test here. The suite comes in four parts: programs that must run
           and print exactly the right thing, programs that must be rejected with
           exactly the right error, every snippet printed in the documentation,
@@ -393,7 +393,7 @@ export default function Tests() {
                 <div className="rounded-lg border border-dashed border-line-2 bg-panel/40 p-8 text-center">
                   <p className="text-sm text-fog">
                     Pick a square to see the program it runs, what it was
-                    expected to produce, and what it actually produced.
+                    expected to produceand what it actually produced.
                   </p>
                   <p className="mt-2 text-xs text-fog">
                     Showing {activeTab.label} results.

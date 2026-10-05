@@ -9,7 +9,7 @@ import org.antlr.v4.runtime.tree.ParseTree;
 /**
  * Command line entry point: parse, check, lower, run.
  *
- * The body of main() is the whole pipeline in order, and each stage can be
+ * The body of main() is the whole pipeline in orderand each stage can be
  * printed on the way past with an --emit flag. Reading this file top to bottom
  * is the shortest description of how Vox works.
  *

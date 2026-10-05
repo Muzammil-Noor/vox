@@ -31,6 +31,7 @@ statement
     | repeatLoop                # repeatStmt
     | SWAP target AND target ';'  # swapStmt
     | SEED_RANDOM expression ';' # seedStmt
+    | DELETE expression FROM expression ';' # deleteStmt
     | STOP_PROGRAM ';'          # haltStmt
     | BREAK ';'                 # breakStmt
     | CONTINUE ';'              # continueStmt
@@ -78,6 +79,7 @@ variableDeclaration
     // after the name adds one list dimension, as in C.
     | DECL_START? FIXED? datatype ID '[' size=expression? ']' (ASSIGN init=expression)?  # declSized
     | ID IS_A_LIST_OF datatype (ASSIGN init=expression)?                                  # declListIs
+    | ID IS_A_MAP_OF key=datatype TO val=datatype (ASSIGN init=expression)?               # declMapIs
     | CONSTANT datatype ID ASSIGN expression                                              # declConstant
     | LET ID ALWAYS BE expression                                                         # declConstantLet
     ;
@@ -88,7 +90,7 @@ assignment
     | SET THE? target TO expression   # setTo
     ;
 
-// Anything that can be assigned to: a variable, an item by index, or an item
+// Anything that can be assigned to: a variable, an item by index or an item
 // by position. Ordinals count from one, so `2nd item of xs` is xs[1].
 target
     : ID                              # nameTarget
@@ -191,6 +193,9 @@ expression
     | expression op=(EQ|NE) expression            # eqExpr
     | expression AND expression                   # andExpr
     | expression OR expression                    # orExpr
+    // `counts["cat"] otherwise 0`: the value at a key or this when the key is
+    // absent. Binds loosest of all, so parenthesise when mixing with maths.
+    | expression ELSE expression                  # defaultExpr
     | functionCall                                # callExpr
     | inputExpression                             # inputExpr
     | ID                                          # idExpr
@@ -199,18 +204,24 @@ expression
     | STRING                                      # stringExpr
     | BOOL                                        # boolExpr
     | '[' (expression (',' expression)*)? ']'     # listExpr
+    // A map literal. `{}` is an empty map. There is no bare block statement in
+    // Vox, so braces here never collide with a block.
+    | '{' (mapEntry (',' mapEntry)*)? '}'         # mapExpr
     ;
+
+mapEntry : key=expression ':' val=expression ;
 
 // Spoken forms of the builtin functions. The symbolic forms (sqrt(x), abs(x),
 // round(x), floor(x), ceiling(x), min(a, b), max(a, b), length(s),
 // uppercase(s), lowercase(s)) are ordinary calls resolved by name.
 builtinName : SQRT_OF | ABS_OF | LENGTH_OF | FLOOR_OF | CEIL_OF | UPPER_OF | LOWER_OF | COPY_OF
             | SUM_OF | LARGEST_OF | SMALLEST_OF
-            | CHARACTERS_OF | TRIM_OF | REVERSED_OF | RANDOM_ITEM_OF ;
+            | CHARACTERS_OF | TRIM_OF | REVERSED_OF | RANDOM_ITEM_OF
+            | KEYS_OF | VALUES_OF ;
 
 // What may follow a dot. The list verbs are keywords, so they are listed.
 methodName  : ID | PUSH | INSERT | POP | LOCK | UNLOCK | WRAP | UNWRAP | SORT | REVERSE
-            | LOCKED | WRAPPING | SHUFFLE ;
+            | LOCKED | WRAPPING | SHUFFLE | DELETE ;
 
 // `list<integer>`, `list of integers` and `integer[]` are the same typeand
 // they nest: `integer[][]` is a list of lists.
@@ -218,6 +229,8 @@ datatype
     : LIST LT datatype GT                                                                        # listType
     | LIST_OF datatype                                                                           # listType
     | datatype '[' ']'                                                                           # listType
+    | MAP LT key=datatype ',' val=datatype GT                                                    # mapType
+    | MAP_OF key=datatype TO val=datatype                                                        # mapType
     | scalar=(DATATYPE_INT | DATATYPE_FLOAT | DATATYPE_BOOL | DATATYPE_CHAR | DATATYPE_STRING)   # scalarType
     ;
 
@@ -278,6 +291,16 @@ IS_A_LIST_OF : 'is' S 'a' S 'list' S 'of' ;
 // decides from what it is applied to. `character` on its own stays a type.
 ITEM_OF      : ('item' | 'value' | 'character' | 'letter') S 'of' ;
 COPY_OF      : 'copy' S 'of' ;
+
+// Maps. `map`, `dictionary` and `dict` are the same word. As with lists, the
+// multi-word forms are their own tokens so `keys` and `values` stay usable as
+// ordinary names.
+MAP          : 'map' | 'dictionary' | 'dict' ;
+MAP_OF       : ('map' | 'dictionary' | 'dict') S 'of' ;
+IS_A_MAP_OF  : 'is' S 'a' S ('map' | 'dictionary' | 'dict') S 'of' ;
+KEYS_OF      : 'keys' S 'of' ;
+VALUES_OF    : 'values' S 'of' ;
+DELETE       : 'delete' ;
 FOR_EACH     : 'for' S ('each' | 'every') ;
 IN           : 'in' ;
 AT           : 'at' ;
@@ -287,7 +310,7 @@ INTO         : 'into' ;
 POP          : 'pop' ;
 CONTAINS     : 'contains' ;
 
-// Locks, wrapping, ordering and constants.
+// Locks, wrapping ordering and constants.
 LOCK        : 'lock' ;
 UNLOCK      : 'unlock' ;
 WRAP        : 'wrap' ;
