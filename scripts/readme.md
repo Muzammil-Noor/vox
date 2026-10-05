@@ -7,7 +7,7 @@ Everything here builds, tests or packages Vox. All of them can be run from the r
 | `build.sh` / `build.bat`  | Generate the parser, compile the Java engine, write `build/vox.jar` |
 | `test.sh`                 | Run every program in `programs/` against one engine          |
 | `parity.sh`               | Run both engines over everything and require identical output |
-| `package.sh` / `package.bat` | Build the standalone `dist/vox/`, a zip, and the installer |
+| `package.sh` / `package.bat` | Build the standalone `dist/vox/`, a zipand the installer |
 | `report.mjs`              | Turn test verdicts into the JSON the website's tests page reads |
 | `check-walkthrough.mjs`   | Confirm the website's "add a feature" page still shows real code |
 | `vox.bat`                 | Launcher for a source checkout, so `vox file.vox` works       |
@@ -18,7 +18,7 @@ Everything here builds, tests or packages Vox. All of them can be run from the r
 
 ```bash
 ./scripts/build.sh     # then: java -jar build/vox.jar programs/examples/factorial.vox
-./scripts/test.sh      # 139 programs, both what they print and what they reject
+./scripts/test.sh      # 151 programs, both what they print and what they reject
 ```
 
 `test.sh` drives whichever engine you point it at:

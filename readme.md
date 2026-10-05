@@ -72,7 +72,7 @@ read the one you care about.
 
 The grammar contains **no embedded code**. It describes syntax and nothing else, which is why the same file can generate a parser for two different languages.
 
-When you want to change something rather than read it, the website's `/extend` page is a step-by-step walkthrough of adding a feature: the seven edits, in order, with a way to check your work after each one. Every snippet on it is real code from this repository, and CI fails if that stops being true.
+When you want to change something rather than read it, the website's `/extend` page is a step-by-step walkthrough of adding a feature: the seven edits, in order, with a way to check your work after each one. Every snippet on it is real code from this repositoryand CI fails if that stops being true.
 
 ## How the pipeline fits together
 
@@ -106,7 +106,7 @@ They are held to identical output, **instruction for instruction** and **error m
 | `Vox.g4`              | The grammar. The specification both engines are built from  |
 | `engines/java/`       | The reference implementation and the command line           |
 | `engines/typescript/` | The same pipeline, for the browser                          |
-| `programs/`           | All 139 Vox programs, sorted by what each one proves        |
+| `programs/`           | All 151 Vox programs, sorted by what each one proves        |
 | `web/`                | The website: landing page, docs, playground, test runner    |
 | `scripts/`            | Build, test, package                                        |
 
@@ -126,7 +126,7 @@ You need a JDK, version 11 or newer and Node 18 or newer for the browser engine.
 
 ```bash
 ./scripts/build.sh          # generates the parser, writes build/vox.jar
-./scripts/test.sh           # runs all 139 programs
+./scripts/test.sh           # runs all 151 programs
 
 npm install
 npm run build -w @vox/core  # the TypeScript engine
@@ -137,7 +137,7 @@ On Windows, `scripts\build.bat` does the same thing. `scripts/package.sh` builds
 
 ## Tests
 
-139 programs, each checked against exactly what it must print or exactly how it must fail, on both engines, on Linux and Windows, on every push.
+151 programs, each checked against exactly what it must print or exactly how it must fail, on both engines, on Linux and Windows, on every push.
 
 ```bash
 ./scripts/test.sh          # one engine against every program
@@ -148,7 +148,7 @@ The website's `/tests` page runs the whole suite live in your browser and shows 
 
 ## Documentation
 
-The website's `/docs` page is the language reference, and every snippet on it
+The website's `/docs` page is the language referenceand every snippet on it
 is a tested program from `programs/snippets/`. That is why it cannot drift: the
 page and the regression suite read the same files.
 
