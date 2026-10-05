@@ -348,6 +348,51 @@ export const CATEGORIES: DocCategory[] = [
   },
 
   {
+    id: "maps",
+    title: "Maps",
+    intro: "Look a value up by name instead of by position.",
+    sections: [
+      {
+        id: "maps",
+        title: "Declaring maps",
+        body: [
+          "A map holds values you find by key rather than by position. Spell the type whichever way reads best: `map<string, integer>`, `map of string to integer` or `ages is a map of string to integer`. `dictionary` and `dict` are the same word as `map`.",
+          "A literal lists the pairs: `{\"ada\": 36}`. `{}` is an empty map, which is also what a map declared without a value starts as.",
+        ],
+        snippet: "maps",
+        notes: [
+          "`length of` counts the entriesand a map with none `is empty`.",
+          "A key can be any single value: text, a whole number, a float or a true/false. It cannot be a list or another map.",
+        ],
+      },
+      {
+        id: "map-keys",
+        title: "Reading, writing and removing",
+        body: [
+          "`ages[\"ada\"]` reads a key. Reading a key that is not there stops the program, the same way an out-of-range list index does, so nothing silently becomes zero. When a missing key is expected, `ages[\"nobody\"] otherwise 0` gives the answer to use instead.",
+          "Writing is how a map grows: `ages[\"grace\"] <- 45` adds the key if it is new. `ages contains \"grace\"` and `\"grace\" is in ages` ask whether a key is thereand `delete \"ada\" from ages` takes one out.",
+        ],
+        snippet: "map-keys",
+        notes: [
+          "`otherwise` binds loosest of all, so parenthesise when mixing it with maths: `(counts[w] otherwise 0) + 1`.",
+          "Because `1 == 1.0` is true in Vox, they are the same key. A map keyed by floats finds `m[1]` and `m[1.0]` in the same place.",
+        ],
+      },
+      {
+        id: "map-walking",
+        title: "Walking a map",
+        body: [
+          "`keys of m` and `values of m` each hand back a list. `for each k in m` walks the keys, so the value is `m[k]`.",
+          "Order is the order the keys were first set, every time, on both engines. That is what makes a program using a map testable at all.",
+        ],
+        snippet: "map-walking",
+        notes: [
+          "Maps are references, like lists: two names can hold the same map. `copy of m` takes a snapshot one level deep.",
+        ],
+      },
+    ],
+  },
+  {
     id: "lists",
     title: "Lists",
     intro: "Ordered, growableand shared by reference.",
@@ -356,7 +401,7 @@ export const CATEGORIES: DocCategory[] = [
         id: "lists",
         title: "Declaring lists",
         body: [
-          "A list holds any number of values of one type. Spell the type whichever way you like - `list<integer>`, `integer[]`, `integer xs[]` or `a list of integers` - and give it items with a literal, a size, or nothing at all.",
+          "A list holds any number of values of one type. Spell the type whichever way you like - `list<integer>`, `integer[]`, `integer xs[]` or `a list of integers` - and give it items with a literal, a size or nothing at all.",
           "`integer xs[5]` starts with five defaults; `integer xs[]` and every other form start empty. Lists nest: `integer[][]` is a list of lists.",
         ],
         snippet: "lists",
@@ -409,7 +454,7 @@ export const CATEGORIES: DocCategory[] = [
             ["`reverse xs`", "`reverse(xs)`, `xs.reverse()`", "in place"],
             ["`sum of xs`", "`sum(xs)`, `xs.sum()`", "`0` for an empty list; a float if any item is"],
             ["`largest of xs`, `smallest of xs`", "`largest(xs)`, `xs.smallest()`", "an item; an empty list is a runtime error"],
-            ["`position of x in xs`", "`position(xs, x)`, `xs.position(x)`", "the index of the first match, or `-1`"],
+            ["`position of x in xs`", "`position(xs, x)`, `xs.position(x)`", "the index of the first match or `-1`"],
           ],
         },
       },
@@ -426,7 +471,7 @@ export const CATEGORIES: DocCategory[] = [
         id: "list-references",
         title: "Lists are references",
         body: [
-          "A list is one thingand a variable holds a reference to it. Assigning a list to another variable, or passing it to a function, makes a second name for the same list - changes through either name show through both. That is how a procedure can fill or sort a list for its caller.",
+          "A list is one thingand a variable holds a reference to it. Assigning a list to another variable or passing it to a function, makes a second name for the same list - changes through either name show through both. That is how a procedure can fill or sort a list for its caller.",
           "When you want an independent list, say so: `copy of xs` makes a new list with the same items (one level deep). `is` compares lists item by item, not by identity.",
         ],
         snippet: "list-references",
@@ -461,7 +506,7 @@ export const CATEGORIES: DocCategory[] = [
         id: "list-errors",
         title: "Out of range",
         body: [
-          "Indexes must be integers from 0 to length - 1; there is no negative or wrap-around indexing. Reading or writing past the end, popping an empty list, or giving a list a negative size stops the program with a runtime error that names the index and the length.",
+          "Indexes must be integers from 0 to length - 1; there is no negative or wrap-around indexing. Reading or writing past the end, popping an empty list or giving a list a negative size stops the program with a runtime error that names the index and the length.",
         ],
         snippet: "list-errors",
       },
@@ -518,7 +563,7 @@ export const CATEGORIES: DocCategory[] = [
             ["`s split by sep`", "`split(s, sep)`, `s.split(sep)`", "a list of strings"],
             ["`xs joined with sep`", "`join(xs, sep)`, `xs.join(sep)`", "one string"],
             ["`trim of s`", "`trim(s)`, `s.trim()`", "without leading or trailing spaces"],
-            ["`reversed of s`", "`reversed(s)`, `s.reversed()`", "a new string, or a new list"],
+            ["`reversed of s`", "`reversed(s)`, `s.reversed()`", "a new string or a new list"],
             ["`characters of s`", "`characters(s)`", "a list of one-character strings"],
             ["-", "`replace(s, from, to)`", "every occurrence replaced"],
             ["`uppercase of s`, `lowercase of s`", "`uppercase(s)`", "a new string"],

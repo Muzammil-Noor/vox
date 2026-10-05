@@ -9,6 +9,7 @@ import counting from "../../programs/examples/counting.vox?raw";
 import playlist from "../../programs/examples/playlist.vox?raw";
 import voice from "../../programs/examples/voice.vox?raw";
 import wordplay from "../../programs/examples/wordplay.vox?raw";
+import tally from "../../programs/examples/tally.vox?raw";
 
 export interface Example {
   id: string;
@@ -47,6 +48,12 @@ export const EXAMPLES: Example[] = [
     name: "Playlist",
     blurb: "Lists: push, pop, ordinals and for each.",
     source: playlist,
+  },
+  {
+    id: "tally",
+    name: "Tally",
+    blurb: "Maps: counting, looking up and finding the winner.",
+    source: tally,
   },
   {
     id: "wordplay",

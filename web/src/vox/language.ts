@@ -15,6 +15,7 @@ const DECL_STARTERS = ['let there be an', 'let there be a', 'consider an', 'cons
 const KEYWORD_PHRASES = [
   'some user input', 'a user input', 'after iteration', 'an input', 'in steps of', 'down to',
   'is a list of', 'for every', 'for each', 'list of', 'item of', 'value of',
+  'is a dictionary of', 'is a map of', 'dictionary of', 'map of', 'dict of',
   'a random number between', 'the random number between', 'seed random with',
   'stop the program', 'end the program', 'character of', 'letter of',
 ];
@@ -35,6 +36,7 @@ const BUILTIN_PHRASES = [
   'smallest of', 'position of', 'largest of', 'sum of',
   'a random character of', 'a random value of', 'a random item of',
   'characters of', 'reversed of', 'letters of', 'trim of',
+  'values of', 'keys of',
 ];
 
 export const PHRASES = [
@@ -58,6 +60,8 @@ export const KEYWORDS = new Set([
   'list', 'in', 'at', 'push', 'insert', 'into', 'pop', 'contains',
   'lock', 'unlock', 'wrap', 'unwrap', 'locked', 'wrapping', 'sort', 'reverse', 'fixed',
   'shuffle', 'starts', 'ends', 'with', 'places', 'place',
+  // maps
+  'map', 'dictionary', 'dict', 'delete',
   // constants
   'constant', 'always',
 ]);

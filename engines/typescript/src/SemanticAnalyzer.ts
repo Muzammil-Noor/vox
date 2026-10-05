@@ -453,7 +453,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
             return this.itemTypeOf(target, base, writing);
         }
         const ordinal = target as OrdinalTargetContext;
-        this.checkOrdinal(ordinal ordinal.ORDINAL());
+        this.checkOrdinal(ordinal, ordinal.ORDINAL());
         return this.itemTypeOf(ordinal, this.typeOfTarget(ordinal.target(), false), writing);
     }
 
@@ -1166,7 +1166,7 @@ export class SemanticAnalyzer extends VoxVisitor<string | null> {
             ctx._op.text!, false);
 
     private comparison(ctx: ParserRuleContext, l: string | null,
-                       r: string | null, op: string ordered: boolean): string {
+                       r: string | null, op: string, ordered: boolean): string {
         if (l === 'error' || r === 'error') return 'error';
         if (l === 'any' || r === 'any') return 'boolean';
         const ok = l !== null && r !== null

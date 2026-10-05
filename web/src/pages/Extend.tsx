@@ -63,7 +63,7 @@ function EditBlock({ edit }: { edit: Edit }) {
 /** The "you should now hear a click" box. */
 function CheckBlock({ check }: { check: Check }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-emerald-500/40 bg-emerald-500/[0.04]">
+    <div className="overflow-hidden rounded-lg border border-emerald-500/40 bg-emerald-500/4">
       <div className="flex items-center gap-2 border-b border-emerald-500/20 px-4 py-2">
         <CheckCircle2 size={13} className="shrink-0 text-emerald-400" />
         <span className="text-xs font-semibold tracking-wide text-emerald-400 uppercase">

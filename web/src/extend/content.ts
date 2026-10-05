@@ -29,7 +29,7 @@ export const SETUP = {
     "git clone https://github.com/Muzammil-Noor/vox.git",
     "cd vox",
     "./scripts/build.sh      # generates the parser and compiles the engine",
-    "./scripts/test.sh       # 139 programs; all of them should pass",
+    "./scripts/test.sh       # 151 programs; all of them should pass",
   ],
 };
 
